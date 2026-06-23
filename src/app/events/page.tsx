@@ -236,6 +236,51 @@ function EventsPageContent(): React.JSX.Element {
     return created.id;
   }
 
+  async function saveEventContent(
+    eventId: string,
+    content: { eventDescription: string; speakerIntro: string }
+  ): Promise<void> {
+    const data = await gqlRequest<{ updateEvent: EventRecord }>(
+      `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
+        updateEvent(id: $id, input: $input) {
+          ${EVENT_FIELDS}
+        }
+      }`,
+      {
+        id: eventId,
+        input: {
+          aiDescription: content.eventDescription,
+          aiSpeakerIntro: content.speakerIntro
+        }
+      }
+    );
+    const updated = normalizeEventRecord(data.updateEvent);
+    updateEvent(updated.id, updated);
+    setSelectedEvent(updated);
+  }
+
+  function applyGeneratedContent(
+    eventId: string,
+    content: { eventDescription: string; speakerIntro: string }
+  ): void {
+    const generatedAt = new Date().toISOString();
+    updateEvent(eventId, {
+      aiDescription: content.eventDescription,
+      aiSpeakerIntro: content.speakerIntro,
+      aiGeneratedAt: generatedAt
+    });
+    setSelectedEvent((current) =>
+      current?.id === eventId
+        ? {
+            ...current,
+            aiDescription: content.eventDescription,
+            aiSpeakerIntro: content.speakerIntro,
+            aiGeneratedAt: generatedAt
+          }
+        : current
+    );
+  }
+
   async function handleSave(values: EventFormValues): Promise<void> {
     setSaving(true);
     try {
@@ -415,24 +460,8 @@ function EventsPageContent(): React.JSX.Element {
                 ? () => persistSpeakerPhotoRemoval(selectedEvent.id)
                 : undefined
             }
-            onAiContentGenerated={(eventId, content) => {
-              const generatedAt = new Date().toISOString();
-              updateEvent(eventId, {
-                aiDescription: content.eventDescription,
-                aiSpeakerIntro: content.speakerIntro,
-                aiGeneratedAt: generatedAt
-              });
-              setSelectedEvent((current) =>
-                current?.id === eventId
-                  ? {
-                      ...current,
-                      aiDescription: content.eventDescription,
-                      aiSpeakerIntro: content.speakerIntro,
-                      aiGeneratedAt: generatedAt
-                    }
-                  : current
-              );
-            }}
+            onAiContentGenerated={applyGeneratedContent}
+            onSaveEventContent={saveEventContent}
           />
         </DialogContent>
       </Dialog>

@@ -8,6 +8,7 @@ import {
 } from "@/components/events/EventAiContentSection";
 import { SpeakerPhotoField } from "@/components/events/SpeakerPhotoField";
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { EventFormValues } from "@/lib/types";
@@ -30,6 +31,13 @@ interface EventFormProps {
       speakerIntro: string;
     }
   ) => void;
+  onSaveEventContent?: (
+    eventId: string,
+    content: {
+      eventDescription: string;
+      speakerIntro: string;
+    }
+  ) => Promise<void>;
 }
 
 export function EventForm({
@@ -43,7 +51,8 @@ export function EventForm({
   onCancel,
   onRemovePersistedPhoto,
   onEnsureEventSaved,
-  onAiContentGenerated
+  onAiContentGenerated,
+  onSaveEventContent
 }: EventFormProps): React.JSX.Element {
   const [values, setValues] = useState<EventFormValues>(initialValues);
 
@@ -81,9 +90,8 @@ export function EventForm({
 
       <div className="space-y-2">
         <Label htmlFor="event-date">Date</Label>
-        <Input
+        <DateInput
           id="event-date"
-          type="date"
           value={values.date}
           onChange={(event) => updateField("date", event.target.value)}
           required
@@ -130,6 +138,7 @@ export function EventForm({
           getEventContext={getEventContext}
           onEnsureEventSaved={onEnsureEventSaved}
           onGenerated={onAiContentGenerated}
+          onSaveContent={onSaveEventContent}
         />
       ) : null}
 
