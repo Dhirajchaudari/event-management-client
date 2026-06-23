@@ -17,16 +17,19 @@ interface SpeakerPhotoFieldProps {
   photoUrl: string;
   disabled?: boolean;
   onChange: (url: string) => void;
+  onRemovePersisted?: () => Promise<void>;
 }
 
 export function SpeakerPhotoField({
   speakerName,
   photoUrl,
   disabled = false,
-  onChange
+  onChange,
+  onRemovePersisted
 }: SpeakerPhotoFieldProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   async function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = event.target.files?.[0];
@@ -53,17 +56,40 @@ export function SpeakerPhotoField({
         return;
       }
       const message = error instanceof Error ? error.message : "Upload failed";
-      pushToast(message === "CLOUDINARY_NOT_CONFIGURED" ? "Photo upload is not configured on the server" : message, "error");
+      pushToast(message, "error");
     } finally {
       setUploading(false);
     }
   }
 
+  async function handleRemove(): Promise<void> {
+    onChange("");
+    if (!onRemovePersisted) {
+      return;
+    }
+
+    setRemoving(true);
+    try {
+      await onRemovePersisted();
+      pushToast("Speaker photo removed", "success");
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Failed to remove photo";
+      pushToast(message, "error");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  const busy = disabled || uploading || removing;
+
   return (
     <div className="space-y-3">
       <Label>Speaker photo</Label>
       <div className="flex items-center gap-4 rounded-2xl border border-border/70 bg-background/35 p-4">
-        <Avatar className="h-16 w-16 rounded-2xl border border-border/70">
+        <Avatar key={photoUrl || "no-photo"} className="h-16 w-16 rounded-2xl border border-border/70">
           {photoUrl ? <AvatarImage src={photoUrl} alt={speakerName || "Speaker"} /> : null}
           <AvatarFallback className="text-sm">{getInitials(speakerName || "Speaker")}</AvatarFallback>
         </Avatar>
@@ -74,14 +100,14 @@ export function SpeakerPhotoField({
             type="file"
             accept="image/jpeg,image/png,image/webp,image/gif"
             className="hidden"
-            disabled={disabled || uploading}
+            disabled={busy}
             onChange={(event) => void handleFileSelect(event)}
           />
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            disabled={disabled || uploading}
+            disabled={busy}
             onClick={() => inputRef.current?.click()}
           >
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
@@ -92,10 +118,10 @@ export function SpeakerPhotoField({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={disabled || uploading}
-              onClick={() => onChange("")}
+              disabled={busy}
+              onClick={() => void handleRemove()}
             >
-              <X className="h-4 w-4" />
+              {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
               Remove
             </Button>
           ) : null}

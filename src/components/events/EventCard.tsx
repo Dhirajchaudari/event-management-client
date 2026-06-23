@@ -43,7 +43,7 @@ export function EventCard({
     >
       <div className="border-b border-border/60 bg-background/30 p-5">
         <div className="flex items-start gap-4">
-          <Avatar className="h-16 w-16 rounded-2xl border border-border/70">
+          <Avatar key={event.speakerPhotoUrl || `${event.id}-no-photo`} className="h-16 w-16 rounded-2xl border border-border/70">
             {event.speakerPhotoUrl ? (
               <AvatarImage src={event.speakerPhotoUrl} alt={event.speakerName} />
             ) : null}

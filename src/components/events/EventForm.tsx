@@ -14,6 +14,7 @@ interface EventFormProps {
   loading?: boolean;
   onSubmit: (values: EventFormValues) => Promise<void>;
   onCancel: () => void;
+  onRemovePersistedPhoto?: () => Promise<void>;
 }
 
 export function EventForm({
@@ -21,7 +22,8 @@ export function EventForm({
   submitLabel,
   loading = false,
   onSubmit,
-  onCancel
+  onCancel,
+  onRemovePersistedPhoto
 }: EventFormProps): React.JSX.Element {
   const [values, setValues] = useState<EventFormValues>(initialValues);
 
@@ -86,6 +88,7 @@ export function EventForm({
         photoUrl={values.speakerPhotoUrl}
         disabled={loading}
         onChange={(url) => updateField("speakerPhotoUrl", url)}
+        onRemovePersisted={onRemovePersistedPhoto}
       />
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">

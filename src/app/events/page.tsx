@@ -128,6 +128,24 @@ export default function EventsPage(): React.JSX.Element {
     [selectedEvent]
   );
 
+  async function persistSpeakerPhotoRemoval(eventId: string): Promise<void> {
+    await gqlRequest(
+      `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
+        updateEvent(id: $id, input: $input) { id speakerPhotoUrl }
+      }`,
+      { id: eventId, input: { speakerPhotoUrl: "" } }
+    );
+
+    setEvents((current) =>
+      current.map((event) =>
+        event.id === eventId ? { ...event, speakerPhotoUrl: undefined } : event
+      )
+    );
+    setSelectedEvent((current) =>
+      current?.id === eventId ? { ...current, speakerPhotoUrl: undefined } : current
+    );
+  }
+
   async function handleSave(values: EventFormValues): Promise<void> {
     setSaving(true);
     try {
@@ -279,6 +297,11 @@ export default function EventsPage(): React.JSX.Element {
             loading={saving}
             onSubmit={handleSave}
             onCancel={closeDialog}
+            onRemovePersistedPhoto={
+              dialogMode === "edit" && selectedEvent
+                ? () => persistSpeakerPhotoRemoval(selectedEvent.id)
+                : undefined
+            }
           />
         </DialogContent>
       </Dialog>
