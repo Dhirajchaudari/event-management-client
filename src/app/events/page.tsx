@@ -4,8 +4,8 @@ import { Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/events/EmptyState";
-import { EventCard } from "@/components/events/EventCard";
 import { EventForm } from "@/components/events/EventForm";
+import { EventTable } from "@/components/events/EventTable";
 import { UpdateStatusDialog } from "@/components/events/UpdateStatusDialog";
 import { ViewAttendeesDialog } from "@/components/events/ViewAttendeesDialog";
 import { AppShell } from "@/components/layout/AppShell";
@@ -37,6 +37,7 @@ import {
   type EventRecord,
   type EventStatus
 } from "@/lib/types";
+import { useEventsStore } from "@/store/events.store";
 import { pushToast } from "@/store/toast.store";
 
 const EVENT_FIELDS = `
@@ -65,8 +66,13 @@ function buildMutationInput(values: EventFormValues): Record<string, unknown> {
 }
 
 export default function EventsPage(): React.JSX.Element {
-  const [events, setEvents] = useState<EventRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const events = useEventsStore((state) => state.events);
+  const loading = useEventsStore((state) => state.loading);
+  const setEvents = useEventsStore((state) => state.setEvents);
+  const setLoading = useEventsStore((state) => state.setLoading);
+  const updateEvent = useEventsStore((state) => state.updateEvent);
+  const removeEvent = useEventsStore((state) => state.removeEvent);
+
   const [saving, setSaving] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [formSession, setFormSession] = useState(0);
@@ -91,7 +97,7 @@ export default function EventsPage(): React.JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setEvents, setLoading]);
 
   useEffect(() => {
     void loadEvents();
@@ -136,11 +142,7 @@ export default function EventsPage(): React.JSX.Element {
       { id: eventId, input: { speakerPhotoUrl: "" } }
     );
 
-    setEvents((current) =>
-      current.map((event) =>
-        event.id === eventId ? { ...event, speakerPhotoUrl: undefined } : event
-      )
-    );
+    updateEvent(eventId, { speakerPhotoUrl: undefined });
     setSelectedEvent((current) =>
       current?.id === eventId ? { ...current, speakerPhotoUrl: undefined } : current
     );
@@ -191,8 +193,8 @@ export default function EventsPage(): React.JSX.Element {
         { id: deleteTarget.id }
       );
       pushToast("Event deleted", "success");
+      removeEvent(deleteTarget.id);
       setDeleteTarget(null);
-      await loadEvents();
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         return;
@@ -208,15 +210,18 @@ export default function EventsPage(): React.JSX.Element {
     if (!statusTarget) return;
     setSaving(true);
     try {
-      await gqlRequest(
-        `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
-          updateEvent(id: $id, input: $input) { id }
+      const data = await gqlRequest<{ updateEventStatus: EventRecord }>(
+        `mutation UpdateEventStatus($eventId: ID!, $status: EventStatus!) {
+          updateEventStatus(eventId: $eventId, status: $status) {
+            ${EVENT_FIELDS}
+          }
         }`,
-        { id: statusTarget.id, input: { status } }
+        { eventId: statusTarget.id, status }
       );
+      const updated = normalizeEventRecord(data.updateEventStatus);
+      updateEvent(updated.id, updated);
       pushToast("Status updated", "success");
       setStatusTarget(null);
-      await loadEvents();
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         return;
@@ -254,30 +259,25 @@ export default function EventsPage(): React.JSX.Element {
       }
     >
       {loading && events.length === 0 ? (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               key={index}
-              className="h-72 animate-pulse rounded-[1.75rem] border border-border/50 bg-surface/40"
+              className="h-16 animate-pulse rounded-[1.75rem] border border-border/50 bg-surface/40"
             />
           ))}
         </div>
       ) : events.length === 0 ? (
         <EmptyState onCreate={openCreateDialog} />
       ) : (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          {events.map((event) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              onEdit={openEditDialog}
-              onDelete={setDeleteTarget}
-              onExportPdf={(event) => void handleExportPdf(event)}
-              onUpdateStatus={setStatusTarget}
-              onViewAttendees={setAttendeesTarget}
-            />
-          ))}
-        </div>
+        <EventTable
+          events={events}
+          onEdit={openEditDialog}
+          onDelete={setDeleteTarget}
+          onExportPdf={(event) => void handleExportPdf(event)}
+          onUpdateStatus={setStatusTarget}
+          onViewAttendees={setAttendeesTarget}
+        />
       )}
 
       <Dialog open={dialogMode !== null} onOpenChange={(open) => !open && closeDialog()}>

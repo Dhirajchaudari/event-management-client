@@ -8,6 +8,7 @@
   --accent: #e8a54b;
   --accent-foreground: #1a1208;
   --teal: #5eead4;
+  --green: #86efac;
   --danger: #fb7185;
   --border: rgba(255, 255, 255, 0.08);
 }
@@ -20,6 +21,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-teal: var(--teal);
+  --color-green: var(--green);
   --color-danger: var(--danger);
   --color-border: var(--border);
   --font-sans: var(--font-outfit);

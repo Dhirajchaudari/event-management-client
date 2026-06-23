@@ -5,7 +5,7 @@ export function normalizeEventStatus(value: string): EventStatus {
   if (EVENT_STATUSES.includes(normalized)) {
     return normalized;
   }
-  return "published";
+  return "draft";
 }
 
 export function normalizeEventRecord(event: EventRecord): EventRecord {
