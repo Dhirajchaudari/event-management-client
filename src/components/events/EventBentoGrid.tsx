@@ -27,14 +27,13 @@ export function EventBentoGrid({
   return (
     <div className={gridClass}>
       {events.map((event, index) => {
-        const { className } = getBentoPlacement(index, events.length);
-        const featured = events.length >= 4 && index % 6 === 0;
+        const { className, layout } = getBentoPlacement(index, events.length);
 
         return (
           <EventCard
             key={event.id}
             event={event}
-            featured={featured}
+            layout={layout}
             className={cn(className)}
             onEdit={onEdit}
             onDelete={onDelete}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Plus, Trash2, Users } from "lucide-react";
+import { Loader2, Plus, Search, Trash2, Users } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatRsvpDate } from "@/lib/format";
+import { formatCreatedDate, formatEventDate, formatRsvpDate, getInitials } from "@/lib/format";
 import { gqlRequest, UnauthorizedError } from "@/lib/graphql";
 import {
   mapRsvpServerError,
@@ -50,7 +50,7 @@ const ATTENDEE_FIELDS = `
 interface ViewAttendeesDialogProps {
   event: EventRecord | null;
   onClose: () => void;
-  onAttendeeCountChange?: (eventId: string, count: number) => void;
+  onAttendeesChange?: (eventId: string, attendees: AttendeeRecord[]) => void;
 }
 
 const EMPTY_RSVP_FORM: RsvpFormValues = {
@@ -64,7 +64,7 @@ const EMPTY_RSVP_ERRORS: RsvpFormErrors = {};
 export function ViewAttendeesDialog({
   event,
   onClose,
-  onAttendeeCountChange
+  onAttendeesChange
 }: ViewAttendeesDialogProps): React.JSX.Element {
   const [attendees, setAttendees] = useState<AttendeeRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,11 +74,16 @@ export function ViewAttendeesDialog({
   const [rsvpErrors, setRsvpErrors] = useState<RsvpFormErrors>(EMPTY_RSVP_ERRORS);
   const [attendeeSearch, setAttendeeSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<AttendeeRecord | null>(null);
-  const onAttendeeCountChangeRef = useRef(onAttendeeCountChange);
+  const onAttendeesChangeRef = useRef(onAttendeesChange);
 
   useEffect(() => {
-    onAttendeeCountChangeRef.current = onAttendeeCountChange;
-  }, [onAttendeeCountChange]);
+    onAttendeesChangeRef.current = onAttendeesChange;
+  }, [onAttendeesChange]);
+
+  const syncAttendees = useCallback((eventId: string, next: AttendeeRecord[]) => {
+    setAttendees(next);
+    onAttendeesChangeRef.current?.(eventId, next);
+  }, []);
 
   const loadAttendees = useCallback(async (eventId: string): Promise<void> => {
     setLoading(true);
@@ -92,7 +97,7 @@ export function ViewAttendeesDialog({
         { eventId }
       );
       setAttendees(data.getEventAttendees);
-      onAttendeeCountChangeRef.current?.(eventId, data.getEventAttendees.length);
+      onAttendeesChangeRef.current?.(eventId, data.getEventAttendees);
     } catch (error) {
       if (error instanceof UnauthorizedError) return;
       const message = error instanceof Error ? error.message : "Failed to load attendees";
@@ -113,6 +118,7 @@ export function ViewAttendeesDialog({
       return;
     }
 
+    setAttendees(event.attendees ?? []);
     void loadAttendees(event.id);
   }, [event?.id, loadAttendees]);
 
@@ -163,7 +169,7 @@ export function ViewAttendeesDialog({
 
       setAttendees((current) => {
         const next = [data.rsvpToEvent, ...current];
-        onAttendeeCountChangeRef.current?.(event.id, next.length);
+        onAttendeesChangeRef.current?.(event.id, next);
         return next;
       });
       setRsvpForm(EMPTY_RSVP_FORM);
@@ -197,8 +203,7 @@ export function ViewAttendeesDialog({
       );
 
       const nextAttendees = attendees.filter((attendee) => attendee.id !== deleteTarget.id);
-      setAttendees(nextAttendees);
-      onAttendeeCountChangeRef.current?.(event.id, nextAttendees.length);
+      syncAttendees(event.id, nextAttendees);
       setDeleteTarget(null);
       pushToast("RSVP removed", "success");
     } catch (error) {
@@ -213,29 +218,51 @@ export function ViewAttendeesDialog({
   return (
     <>
       <Dialog open={event !== null} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="max-h-[min(90vh,720px)] w-[min(94vw,42rem)] max-w-none overflow-y-auto">
-          <DialogHeader>
-            <div className="flex flex-wrap items-center gap-2">
-              <DialogTitle>Attendees</DialogTitle>
-              {event ? (
-                <Badge variant="muted" className="normal-case tracking-normal">
-                  <Users className="mr-1 h-3 w-3" />
-                  {attendees.length} RSVP{attendees.length === 1 ? "" : "s"}
-                </Badge>
-              ) : null}
-            </div>
-            <DialogDescription>
-              {event ? `Manage registrations for "${event.name}".` : ""}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="flex max-h-[min(90vh,760px)] w-[min(94vw,40rem)] max-w-none flex-col gap-0 overflow-hidden p-0">
+          <div className="border-b border-border/60 px-6 py-5">
+            <DialogHeader className="space-y-2 text-left">
+              <div className="flex flex-wrap items-center gap-2">
+                <DialogTitle>Attendees</DialogTitle>
+                {event ? (
+                  <Badge variant="muted" className="normal-case tracking-normal">
+                    <Users className="mr-1 h-3 w-3" />
+                    {attendees.length} RSVP{attendees.length === 1 ? "" : "s"}
+                  </Badge>
+                ) : null}
+              </div>
+              <DialogDescription>
+                {event ? (
+                  <>
+                    {event.name} · {formatEventDate(event.date)} · Created{" "}
+                    {formatCreatedDate(event.createdAt)}
+                  </>
+                ) : (
+                  ""
+                )}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
 
           {event ? (
-            <div className="space-y-4">
-              <div className="flex justify-end">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-6 py-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                  <Input
+                    id="attendee-search"
+                    type="search"
+                    value={attendeeSearch}
+                    onChange={(changeEvent) => setAttendeeSearch(changeEvent.target.value)}
+                    placeholder="Search name or email..."
+                    className="pl-9"
+                    disabled={loading || attendees.length === 0}
+                  />
+                </div>
                 <Button
                   type="button"
                   size="sm"
                   variant={showRsvpForm ? "secondary" : "default"}
+                  className="shrink-0"
                   disabled={loading || saving}
                   onClick={() => {
                     setShowRsvpForm((current) => !current);
@@ -243,18 +270,15 @@ export function ViewAttendeesDialog({
                   }}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  {showRsvpForm ? "Close form" : "Add RSVP"}
+                  {showRsvpForm ? "Cancel" : "Add RSVP"}
                 </Button>
               </div>
 
               {showRsvpForm ? (
                 <form
-                  className="space-y-3 rounded-2xl border border-border/70 bg-background/35 p-4"
+                  className="shrink-0 space-y-3 rounded-2xl border border-border/70 bg-background/35 p-4"
                   onSubmit={(submitEvent) => void handleAddRsvp(submitEvent)}
                 >
-                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
-                    New RSVP
-                  </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5 sm:col-span-2">
                       <Label htmlFor="rsvp-name">Name</Label>
@@ -272,10 +296,9 @@ export function ViewAttendeesDialog({
                           }
                         }}
                         onBlur={() => {
-                          const nameError = validateRsvpName(rsvpForm.name);
                           setRsvpErrors((current) => ({
                             ...current,
-                            name: nameError
+                            name: validateRsvpName(rsvpForm.name)
                           }));
                         }}
                         placeholder="Dr. Jane Smith"
@@ -287,7 +310,7 @@ export function ViewAttendeesDialog({
                         <p className="text-xs text-danger">{rsvpErrors.name}</p>
                       ) : null}
                     </div>
-                    <div className="space-y-1.5 sm:col-span-2">
+                    <div className="space-y-1.5">
                       <Label htmlFor="rsvp-email">Email</Label>
                       <Input
                         id="rsvp-email"
@@ -304,10 +327,9 @@ export function ViewAttendeesDialog({
                           }
                         }}
                         onBlur={() => {
-                          const emailError = validateRsvpEmail(rsvpForm.email, existingEmails);
                           setRsvpErrors((current) => ({
                             ...current,
-                            email: emailError
+                            email: validateRsvpEmail(rsvpForm.email, existingEmails)
                           }));
                         }}
                         placeholder="jane@hospital.org"
@@ -335,19 +357,7 @@ export function ViewAttendeesDialog({
                       />
                     </div>
                   </div>
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      disabled={saving}
-                      onClick={() => {
-                        setShowRsvpForm(false);
-                        resetRsvpForm();
-                      }}
-                    >
-                      Cancel
-                    </Button>
+                  <div className="flex justify-end">
                     <Button type="submit" size="sm" disabled={saving}>
                       {saving ? "Saving..." : "Save RSVP"}
                     </Button>
@@ -355,82 +365,57 @@ export function ViewAttendeesDialog({
                 </form>
               ) : null}
 
-              {loading ? (
-                <div className="flex items-center justify-center gap-2 rounded-2xl border border-border/60 py-12 text-sm text-muted">
-                  <Loader2 className="h-4 w-4 animate-spin text-accent" />
-                  Loading attendees...
-                </div>
-              ) : attendees.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border/70 px-4 py-10 text-center">
-                  <p className="text-sm font-medium text-foreground">No RSVPs yet</p>
-                  <p className="mt-2 text-sm text-muted">
-                    Add the first registration using the button above.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {attendees.length > 0 ? (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="attendee-search">Search by email or name</Label>
-                      <Input
-                        id="attendee-search"
-                        type="search"
-                        value={attendeeSearch}
-                        onChange={(changeEvent) => setAttendeeSearch(changeEvent.target.value)}
-                        placeholder="Search attendees..."
-                      />
-                    </div>
-                  ) : null}
-
-                  {filteredAttendees.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-border/70 px-4 py-8 text-center">
-                      <p className="text-sm font-medium text-foreground">No matching RSVPs</p>
-                      <p className="mt-2 text-sm text-muted">Try a different email or name.</p>
-                    </div>
-                  ) : (
-                <div className="overflow-hidden rounded-2xl border border-border/70">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-border/60 bg-background/30 text-xs font-medium uppercase tracking-[0.14em] text-muted">
-                          <th className="px-4 py-3 font-medium">Name</th>
-                          <th className="px-4 py-3 font-medium">Email</th>
-                          <th className="px-4 py-3 font-medium">Specialty</th>
-                          <th className="px-4 py-3 font-medium">RSVP date</th>
-                          <th className="px-4 py-3 text-right font-medium">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredAttendees.map((attendee) => (
-                          <tr
-                            key={attendee.id}
-                            className="border-b border-border/50 last:border-b-0"
-                          >
-                            <td className="px-4 py-3 font-medium text-foreground">{attendee.name}</td>
-                            <td className="px-4 py-3 text-muted">{attendee.email}</td>
-                            <td className="px-4 py-3 text-muted">{attendee.specialty || "—"}</td>
-                            <td className="px-4 py-3 text-muted">{formatRsvpDate(attendee.rsvpAt)}</td>
-                            <td className="px-4 py-3 text-right">
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                disabled={saving}
-                                onClick={() => setDeleteTarget(attendee)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Remove
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                {loading ? (
+                  <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted">
+                    <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                    Loading attendees...
                   </div>
-                </div>
-                  )}
-                </div>
-              )}
+                ) : attendees.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/70 px-4 py-12 text-center">
+                    <p className="text-sm font-medium text-foreground">No RSVPs yet</p>
+                    <p className="mt-2 text-sm text-muted">Add the first registration above.</p>
+                  </div>
+                ) : filteredAttendees.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/70 px-4 py-12 text-center">
+                    <p className="text-sm font-medium text-foreground">No matches found</p>
+                    <p className="mt-2 text-sm text-muted">Try a different search term.</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {filteredAttendees.map((attendee) => (
+                      <li
+                        key={attendee.id}
+                        className="flex items-start gap-3 rounded-2xl border border-border/60 bg-background/30 p-3"
+                      >
+                        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-surface text-xs font-medium text-foreground">
+                          {getInitials(attendee.name)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground">{attendee.name}</p>
+                          <p className="truncate text-sm text-muted">{attendee.email}</p>
+                          <p className="mt-1 text-xs text-muted">
+                            {[attendee.specialty, formatRsvpDate(attendee.rsvpAt)]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 text-danger hover:bg-danger/10 hover:text-danger"
+                          disabled={saving}
+                          aria-label={`Remove ${attendee.name}`}
+                          onClick={() => setDeleteTarget(attendee)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           ) : null}
         </DialogContent>

@@ -28,6 +28,7 @@ export interface EventRecord {
   speakerPhotoUrl?: string | null;
   status: EventStatus;
   attendeeCount: number;
+  attendees?: AttendeeRecord[];
   aiDescription?: string | null;
   aiSpeakerIntro?: string | null;
   aiGeneratedAt?: string | null;

@@ -56,12 +56,14 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps):
   return (
     <div className="min-h-screen bg-background">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="noise-overlay absolute inset-0 opacity-[0.18]" />
         <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-accent/10 blur-3xl" />
         <div className="absolute right-0 top-32 h-80 w-80 rounded-full bg-teal/10 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-accent/5 blur-3xl" />
       </div>
 
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/75 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-[88rem] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <BrandLogo />
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
@@ -109,7 +111,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps):
         </div>
       </header>
 
-      <main className="relative mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+      <main className="relative mx-auto max-w-[88rem] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">Dashboard</p>

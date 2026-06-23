@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/events/EmptyState";
 import { EventFiltersBar } from "@/components/events/EventFiltersBar";
 import { EventForm, type EventContentValues } from "@/components/events/EventForm";
 import { EventBentoGrid } from "@/components/events/EventBentoGrid";
+import { EventsOverview } from "@/components/events/EventsOverview";
 import { getBentoGridClass } from "@/lib/event-bento";
 import { FilteredEmptyState } from "@/components/events/FilteredEmptyState";
 import { UpdateStatusDialog } from "@/components/events/UpdateStatusDialog";
@@ -40,7 +41,8 @@ import {
   EMPTY_EVENT_FORM,
   type EventFormValues,
   type EventRecord,
-  type EventStatus
+  type EventStatus,
+  type AttendeeRecord
 } from "@/lib/types";
 import { useEventsStore } from "@/store/events.store";
 import { pushToast } from "@/store/toast.store";
@@ -58,6 +60,15 @@ const EMPTY_CONTENT: EventContentValues = {
   speakerIntro: ""
 };
 
+const ATTENDEE_FIELDS = `
+  id
+  eventId
+  name
+  email
+  specialty
+  rsvpAt
+`;
+
 const EVENT_FIELDS = `
   id
   name
@@ -67,6 +78,9 @@ const EVENT_FIELDS = `
   speakerPhotoUrl
   status
   attendeeCount
+  attendees {
+    ${ATTENDEE_FIELDS}
+  }
   aiDescription
   aiSpeakerIntro
   aiGeneratedAt
@@ -116,6 +130,7 @@ function EventsPageContent(): React.JSX.Element {
   const removeEvent = useEventsStore((state) => state.removeEvent);
 
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [contentDraft, setContentDraft] = useState<EventContentValues>(EMPTY_CONTENT);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
@@ -141,13 +156,17 @@ function EventsPageContent(): React.JSX.Element {
     [events, debouncedSearch, statusFilter, dateFilter]
   );
 
+  const fetchEvents = useCallback(async (): Promise<void> => {
+    const data = await gqlRequest<{ events: EventRecord[] }>(
+      `query { events { ${EVENT_FIELDS} } }`
+    );
+    setEvents(data.events.map(normalizeEventRecord));
+  }, [setEvents]);
+
   const loadEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await gqlRequest<{ events: EventRecord[] }>(
-        `query { events { ${EVENT_FIELDS} } }`
-      );
-      setEvents(data.events.map(normalizeEventRecord));
+      await fetchEvents();
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         return;
@@ -157,7 +176,25 @@ function EventsPageContent(): React.JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, [setEvents, setLoading]);
+  }, [fetchEvents, setLoading]);
+
+  const refreshEvents = useCallback(async () => {
+    if (refreshing) return;
+
+    setRefreshing(true);
+    try {
+      await fetchEvents();
+      pushToast("Events refreshed", "success");
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Failed to refresh events";
+      pushToast(message, "error");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchEvents, refreshing]);
 
   useEffect(() => {
     void loadEvents();
@@ -446,11 +483,13 @@ function EventsPageContent(): React.JSX.Element {
     }
   }
 
-  const handleAttendeeCountChange = useCallback(
-    (eventId: string, count: number) => {
-      updateEvent(eventId, { attendeeCount: count });
+  const handleAttendeesChange = useCallback(
+    (eventId: string, attendees: AttendeeRecord[]) => {
+      updateEvent(eventId, { attendeeCount: attendees.length, attendees });
       setAttendeesTarget((current) =>
-        current?.id === eventId ? { ...current, attendeeCount: count } : current
+        current?.id === eventId
+          ? { ...current, attendeeCount: attendees.length, attendees }
+          : current
       );
     },
     [updateEvent]
@@ -462,8 +501,14 @@ function EventsPageContent(): React.JSX.Element {
       subtitle="Curate sessions, speakers, and dates in a timeline built for conference teams."
       actions={
         <div className="flex gap-2">
-          <Button variant="secondary" size="icon" onClick={() => void loadEvents()} aria-label="Refresh">
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          <Button
+            variant="secondary"
+            size="icon"
+            onClick={() => void refreshEvents()}
+            disabled={refreshing}
+            aria-label="Refresh events"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
           </Button>
           <Button onClick={openCreateDialog}>
             <Plus className="h-4 w-4" />
@@ -485,6 +530,8 @@ function EventsPageContent(): React.JSX.Element {
         <EmptyState onCreate={openCreateDialog} />
       ) : (
         <div className="space-y-5">
+          <EventsOverview events={events} />
+
           <EventFiltersBar
             search={searchInput}
             status={statusFilter}
@@ -551,7 +598,7 @@ function EventsPageContent(): React.JSX.Element {
       <ViewAttendeesDialog
         event={attendeesTarget}
         onClose={() => setAttendeesTarget(null)}
-        onAttendeeCountChange={handleAttendeeCountChange}
+        onAttendeesChange={handleAttendeesChange}
       />
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
