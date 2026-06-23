@@ -2,6 +2,7 @@
 
 import { Search } from "lucide-react";
 
+import { FilterSelect } from "@/components/ui/filter-select";
 import { Input } from "@/components/ui/input";
 import {
   DATE_FILTER_OPTIONS,
@@ -9,7 +10,6 @@ import {
   type DateFilter,
   type StatusFilter
 } from "@/lib/event-filters";
-import { cn } from "@/lib/utils";
 
 interface EventFiltersBarProps {
   search: string;
@@ -21,11 +21,6 @@ interface EventFiltersBarProps {
   onStatusChange: (value: StatusFilter) => void;
   onDateChange: (value: DateFilter) => void;
 }
-
-const selectClassName = cn(
-  "h-11 w-full rounded-xl border border-border/80 bg-background/60 px-4 text-sm text-foreground shadow-inner shadow-black/10 transition-colors",
-  "focus-visible:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
-);
 
 export function EventFiltersBar({
   search,
@@ -51,32 +46,21 @@ export function EventFiltersBar({
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-[26rem]">
-          <select
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-[28rem]">
+          <FilterSelect
             value={status}
-            onChange={(event) => onStatusChange(event.target.value as StatusFilter)}
-            className={selectClassName}
-            aria-label="Filter by status"
-          >
-            {STATUS_FILTER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          <select
+            options={STATUS_FILTER_OPTIONS}
+            onValueChange={onStatusChange}
+            ariaLabel="Filter by status"
+            className="w-full sm:min-w-[13rem]"
+          />
+          <FilterSelect
             value={date}
-            onChange={(event) => onDateChange(event.target.value as DateFilter)}
-            className={selectClassName}
-            aria-label="Filter by date"
-          >
-            {DATE_FILTER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            options={DATE_FILTER_OPTIONS}
+            onValueChange={onDateChange}
+            ariaLabel="Filter by date"
+            className="w-full sm:min-w-[13rem]"
+          />
         </div>
       </div>
 
