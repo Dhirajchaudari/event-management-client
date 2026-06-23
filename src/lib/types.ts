@@ -10,6 +10,15 @@ export interface SessionUser {
   role: UserRole;
 }
 
+export interface AttendeeRecord {
+  id: string;
+  eventId: string;
+  name: string;
+  email: string;
+  specialty?: string | null;
+  rsvpAt: string;
+}
+
 export interface EventRecord {
   id: string;
   name: string;

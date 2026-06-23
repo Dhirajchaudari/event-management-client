@@ -5,8 +5,9 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/events/EmptyState";
 import { EventFiltersBar } from "@/components/events/EventFiltersBar";
-import { EventForm } from "@/components/events/EventForm";
-import { EventTable } from "@/components/events/EventTable";
+import { EventForm, type EventContentValues } from "@/components/events/EventForm";
+import { EventBentoGrid } from "@/components/events/EventBentoGrid";
+import { getBentoGridClass } from "@/lib/event-bento";
 import { FilteredEmptyState } from "@/components/events/FilteredEmptyState";
 import { UpdateStatusDialog } from "@/components/events/UpdateStatusDialog";
 import { ViewAttendeesDialog } from "@/components/events/ViewAttendeesDialog";
@@ -41,9 +42,21 @@ import {
   type EventRecord,
   type EventStatus
 } from "@/lib/types";
-import type { EventAiContext } from "@/components/events/EventAiContentSection";
 import { useEventsStore } from "@/store/events.store";
 import { pushToast } from "@/store/toast.store";
+
+interface EventDraftContext {
+  name: string;
+  date: string;
+  speakerName: string;
+  speakerDesignation: string;
+  speakerPhotoUrl?: string;
+}
+
+const EMPTY_CONTENT: EventContentValues = {
+  eventDescription: "",
+  speakerIntro: ""
+};
 
 const EVENT_FIELDS = `
   id
@@ -78,11 +91,11 @@ export default function EventsPage(): React.JSX.Element {
     <Suspense
       fallback={
         <AppShell title="Event lineup" subtitle="Loading your conference lineup...">
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, index) => (
+          <div className={getBentoGridClass(2)}>
+            {Array.from({ length: 2 }).map((_, index) => (
               <div
                 key={index}
-                className="h-16 animate-pulse rounded-[1.75rem] border border-border/50 bg-surface/40"
+                className="min-h-72 animate-pulse rounded-[1.75rem] border border-border/50 bg-surface/40"
               />
             ))}
           </div>
@@ -103,6 +116,8 @@ function EventsPageContent(): React.JSX.Element {
   const removeEvent = useEventsStore((state) => state.removeEvent);
 
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [contentDraft, setContentDraft] = useState<EventContentValues>(EMPTY_CONTENT);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [formSession, setFormSession] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState<EventRecord | null>(null);
@@ -150,12 +165,17 @@ function EventsPageContent(): React.JSX.Element {
 
   function openCreateDialog(): void {
     setSelectedEvent(null);
+    setContentDraft(EMPTY_CONTENT);
     setFormSession((current) => current + 1);
     setDialogMode("create");
   }
 
   function openEditDialog(event: EventRecord): void {
     setSelectedEvent(event);
+    setContentDraft({
+      eventDescription: event.aiDescription ?? "",
+      speakerIntro: event.aiSpeakerIntro ?? ""
+    });
     setFormSession((current) => current + 1);
     setDialogMode("edit");
   }
@@ -163,6 +183,7 @@ function EventsPageContent(): React.JSX.Element {
   function closeDialog(): void {
     setDialogMode(null);
     setSelectedEvent(null);
+    setContentDraft(EMPTY_CONTENT);
   }
 
   const formInitialValues = useMemo<EventFormValues>(
@@ -193,7 +214,7 @@ function EventsPageContent(): React.JSX.Element {
     );
   }
 
-  async function ensureEventSavedForAi(context: EventAiContext): Promise<string> {
+  async function ensureEventSavedForAi(context: EventDraftContext): Promise<string> {
     const input = {
       name: context.name.trim(),
       date: context.date,
@@ -236,29 +257,6 @@ function EventsPageContent(): React.JSX.Element {
     return created.id;
   }
 
-  async function saveEventContent(
-    eventId: string,
-    content: { eventDescription: string; speakerIntro: string }
-  ): Promise<void> {
-    const data = await gqlRequest<{ updateEvent: EventRecord }>(
-      `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
-        updateEvent(id: $id, input: $input) {
-          ${EVENT_FIELDS}
-        }
-      }`,
-      {
-        id: eventId,
-        input: {
-          aiDescription: content.eventDescription,
-          aiSpeakerIntro: content.speakerIntro
-        }
-      }
-    );
-    const updated = normalizeEventRecord(data.updateEvent);
-    updateEvent(updated.id, updated);
-    setSelectedEvent(updated);
-  }
-
   function applyGeneratedContent(
     eventId: string,
     content: { eventDescription: string; speakerIntro: string }
@@ -281,19 +279,90 @@ function EventsPageContent(): React.JSX.Element {
     );
   }
 
-  async function handleSave(values: EventFormValues): Promise<void> {
+  async function handleGenerateContent(values: EventFormValues): Promise<void> {
+    const context: EventDraftContext = {
+      name: values.name.trim(),
+      date: values.date,
+      speakerName: values.speakerName.trim(),
+      speakerDesignation: values.speakerDesignation.trim(),
+      ...(values.speakerPhotoUrl.trim() ? { speakerPhotoUrl: values.speakerPhotoUrl.trim() } : {})
+    };
+
+    if (!context.name || !context.date || !context.speakerName || !context.speakerDesignation) {
+      pushToast("Fill in event name, date, and speaker details first", "error");
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const eventId = await ensureEventSavedForAi(context);
+      const data = await gqlRequest<{
+        generateEventContent: { eventDescription: string; speakerIntro: string };
+      }>(
+        `mutation GenerateEventContent($eventId: ID!) {
+          generateEventContent(eventId: $eventId) {
+            eventDescription
+            speakerIntro
+          }
+        }`,
+        { eventId }
+      );
+
+      const generated = data.generateEventContent;
+      setContentDraft({
+        eventDescription: generated.eventDescription,
+        speakerIntro: generated.speakerIntro
+      });
+      applyGeneratedContent(eventId, generated);
+      pushToast("Content generated", "success");
+    } catch (error) {
+      if (error instanceof UnauthorizedError) return;
+      const message = error instanceof Error ? error.message : "Failed to generate content";
+      pushToast(message, "error");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function buildContentInput(content: EventContentValues): Record<string, string> | undefined {
+    const aiDescription = content.eventDescription.trim();
+    const aiSpeakerIntro = content.speakerIntro.trim();
+    if (!aiDescription && !aiSpeakerIntro) return undefined;
+    return {
+      ...(aiDescription ? { aiDescription } : {}),
+      ...(aiSpeakerIntro ? { aiSpeakerIntro } : {})
+    };
+  }
+
+  async function handleSave(
+    values: EventFormValues,
+    content: EventContentValues
+  ): Promise<void> {
     setSaving(true);
     try {
-      const input = buildMutationInput(values);
+      const input = {
+        ...buildMutationInput(values),
+        ...buildContentInput(content)
+      };
       const existingEventId = selectedEvent?.id;
 
       if (dialogMode === "create" && !existingEventId) {
-        await gqlRequest(
+        const data = await gqlRequest<{ createEvent: { id: string } }>(
           `mutation CreateEvent($input: CreateEventInput!) {
             createEvent(input: $input) { id }
           }`,
-          { input }
+          { input: buildMutationInput(values) }
         );
+        const createdId = data.createEvent.id;
+        const contentInput = buildContentInput(content);
+        if (contentInput) {
+          await gqlRequest(
+            `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
+              updateEvent(id: $id, input: $input) { id }
+            }`,
+            { id: createdId, input: contentInput }
+          );
+        }
         pushToast("Event created", "success");
       } else if (existingEventId) {
         await gqlRequest(
@@ -377,6 +446,16 @@ function EventsPageContent(): React.JSX.Element {
     }
   }
 
+  const handleAttendeeCountChange = useCallback(
+    (eventId: string, count: number) => {
+      updateEvent(eventId, { attendeeCount: count });
+      setAttendeesTarget((current) =>
+        current?.id === eventId ? { ...current, attendeeCount: count } : current
+      );
+    },
+    [updateEvent]
+  );
+
   return (
     <AppShell
       title="Event lineup"
@@ -394,11 +473,11 @@ function EventsPageContent(): React.JSX.Element {
       }
     >
       {loading && events.length === 0 ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, index) => (
+        <div className={getBentoGridClass(2)}>
+          {Array.from({ length: 2 }).map((_, index) => (
             <div
               key={index}
-              className="h-16 animate-pulse rounded-[1.75rem] border border-border/50 bg-surface/40"
+              className="min-h-72 animate-pulse rounded-[1.75rem] border border-border/50 bg-surface/40"
             />
           ))}
         </div>
@@ -420,11 +499,11 @@ function EventsPageContent(): React.JSX.Element {
           {filteredEvents.length === 0 ? (
             <FilteredEmptyState onClearFilters={clearFilters} />
           ) : (
-            <EventTable
+            <EventBentoGrid
               events={filteredEvents}
               onEdit={openEditDialog}
               onDelete={setDeleteTarget}
-              onExportPdf={(event) => void handleExportPdf(event)}
+              onExportPdf={(item) => void handleExportPdf(item)}
               onUpdateStatus={setStatusTarget}
               onViewAttendees={setAttendeesTarget}
             />
@@ -433,35 +512,31 @@ function EventsPageContent(): React.JSX.Element {
       )}
 
       <Dialog open={dialogMode !== null} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="flex max-h-[min(90vh,680px)] max-w-lg flex-col gap-3 overflow-hidden p-6">
-          <DialogHeader className="shrink-0">
+        <DialogContent className="max-h-[min(90vh,820px)] w-[min(94vw,48rem)] max-w-none overflow-y-auto">
+          <DialogHeader>
             <DialogTitle>{dialogMode === "create" ? "Create event" : "Edit event"}</DialogTitle>
             <DialogDescription>
-              {dialogMode === "create"
-                ? "Add session details, then optional CME content."
-                : "Update details or event content."}
+              Session details and optional CME copy in one place.
             </DialogDescription>
           </DialogHeader>
           <EventForm
             key={`${dialogMode ?? "closed"}-${formSession}`}
             initialValues={formInitialValues}
+            content={contentDraft}
+            onContentChange={setContentDraft}
             submitLabel={
               dialogMode === "create" && !selectedEvent?.id ? "Create event" : "Save changes"
             }
             loading={saving}
-            eventId={selectedEvent?.id}
-            initialAiDescription={selectedEvent?.aiDescription ?? undefined}
-            initialAiSpeakerIntro={selectedEvent?.aiSpeakerIntro ?? undefined}
+            generating={generating}
             onSubmit={handleSave}
             onCancel={closeDialog}
-            onEnsureEventSaved={ensureEventSavedForAi}
+            onGenerateContent={(values) => void handleGenerateContent(values)}
             onRemovePersistedPhoto={
               selectedEvent?.id
                 ? () => persistSpeakerPhotoRemoval(selectedEvent.id)
                 : undefined
             }
-            onAiContentGenerated={applyGeneratedContent}
-            onSaveEventContent={saveEventContent}
           />
         </DialogContent>
       </Dialog>
@@ -473,7 +548,11 @@ function EventsPageContent(): React.JSX.Element {
         onSave={handleStatusSave}
       />
 
-      <ViewAttendeesDialog event={attendeesTarget} onClose={() => setAttendeesTarget(null)} />
+      <ViewAttendeesDialog
+        event={attendeesTarget}
+        onClose={() => setAttendeesTarget(null)}
+        onAttendeeCountChange={handleAttendeeCountChange}
+      />
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

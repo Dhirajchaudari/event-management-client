@@ -32,6 +32,17 @@ export function getMonthGroupKey(isoDate: string): string {
   }).format(date);
 }
 
+export function formatRsvpDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(date);
+}
+
 export function getInitials(name: string): string {
   return name
     .split(/\s+/)
