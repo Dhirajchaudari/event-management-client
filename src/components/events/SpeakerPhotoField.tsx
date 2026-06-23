@@ -5,7 +5,6 @@ import { useRef, useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { getInitials } from "@/lib/format";
 import { uploadSpeakerPhoto, UnauthorizedError } from "@/lib/upload";
 import { pushToast } from "@/store/toast.store";
@@ -86,48 +85,50 @@ export function SpeakerPhotoField({
   const busy = disabled || uploading || removing;
 
   return (
-    <div className="space-y-3">
-      <Label>Speaker photo</Label>
-      <div className="flex items-center gap-4 rounded-2xl border border-border/70 bg-background/35 p-4">
-        <Avatar key={photoUrl || "no-photo"} className="h-16 w-16 rounded-2xl border border-border/70">
-          {photoUrl ? <AvatarImage src={photoUrl} alt={speakerName || "Speaker"} /> : null}
-          <AvatarFallback className="text-sm">{getInitials(speakerName || "Speaker")}</AvatarFallback>
-        </Avatar>
+    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-background/20 px-3 py-3">
+      <Avatar key={photoUrl || "no-photo"} className="h-12 w-12 shrink-0 rounded-xl border border-border/70">
+        {photoUrl ? <AvatarImage src={photoUrl} alt={speakerName || "Speaker"} /> : null}
+        <AvatarFallback className="text-xs">{getInitials(speakerName || "Speaker")}</AvatarFallback>
+      </Avatar>
 
-        <div className="flex flex-1 flex-wrap gap-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
-            className="hidden"
-            disabled={busy}
-            onChange={(event) => void handleFileSelect(event)}
-          />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-foreground">Speaker photo</p>
+        <p className="text-[11px] text-muted">Optional · up to 5 MB</p>
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+        disabled={busy}
+        onChange={(event) => void handleFileSelect(event)}
+      />
+
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+        >
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+          {uploading ? "..." : photoUrl ? "Replace" : "Upload"}
+        </Button>
+        {photoUrl ? (
           <Button
             type="button"
-            variant="secondary"
+            variant="ghost"
             size="sm"
+            className="px-2"
             disabled={busy}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => void handleRemove()}
           >
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-            {uploading ? "Uploading..." : photoUrl ? "Replace photo" : "Upload photo"}
+            {removing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
           </Button>
-          {photoUrl ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onClick={() => void handleRemove()}
-            >
-              {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-              Remove
-            </Button>
-          ) : null}
-        </div>
+        ) : null}
       </div>
-      <p className="text-xs text-muted">JPEG, PNG, WebP, or GIF up to 5 MB. Stored on Cloudinary.</p>
     </div>
   );
 }

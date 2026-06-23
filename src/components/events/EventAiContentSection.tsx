@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Save, Sparkles } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -43,10 +43,10 @@ function isContextReady(context: EventAiContext): boolean {
 
 function formatAiError(message: string): string {
   if (message.includes("503") || message.toLowerCase().includes("high demand")) {
-    return "Gemini is temporarily busy. Try again shortly or enter content manually below.";
+    return "Gemini is busy — try again or type content below.";
   }
   if (message.includes("429")) {
-    return "Gemini rate limit reached. Wait a moment or enter content manually below.";
+    return "Rate limit hit — wait a moment or type content below.";
   }
   return message;
 }
@@ -65,8 +65,8 @@ export function EventAiContentSection({
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const hasGeneratedContent = Boolean(eventDescription.trim() || speakerIntro.trim());
-  const generateLabel = hasGeneratedContent ? "Regenerate" : "Generate with AI";
+  const hasContent = Boolean(eventDescription.trim() || speakerIntro.trim());
+  const busy = generating || saving;
 
   async function resolveEventId(context: EventAiContext): Promise<string> {
     return eventId ?? (await onEnsureEventSaved(context));
@@ -76,14 +76,13 @@ export function EventAiContentSection({
     const context = getEventContext();
 
     if (!isContextReady(context)) {
-      pushToast("Fill in event name, date, and speaker details first", "error");
+      pushToast("Complete the Details tab first", "error");
       return;
     }
 
     setGenerating(true);
     try {
       const resolvedEventId = await resolveEventId(context);
-
       const data = await gqlRequest<{ generateEventContent: GeneratedEventContent }>(
         `mutation GenerateEventContent($eventId: ID!) {
           generateEventContent(eventId: $eventId) {
@@ -99,9 +98,7 @@ export function EventAiContentSection({
       onGenerated?.(resolvedEventId, data.generateEventContent);
       pushToast("Content generated successfully", "success");
     } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        return;
-      }
+      if (error instanceof UnauthorizedError) return;
       const message = error instanceof Error ? error.message : "Failed to generate content";
       pushToast(formatAiError(message), "error");
     } finally {
@@ -113,14 +110,12 @@ export function EventAiContentSection({
     if (!onSaveContent) return;
 
     const context = getEventContext();
-
     if (!isContextReady(context)) {
-      pushToast("Fill in event name, date, and speaker details first", "error");
+      pushToast("Complete the Details tab first", "error");
       return;
     }
-
     if (!eventDescription.trim() && !speakerIntro.trim()) {
-      pushToast("Enter an event description or speaker introduction to save", "error");
+      pushToast("Add a description or speaker intro to save", "error");
       return;
     }
 
@@ -131,11 +126,9 @@ export function EventAiContentSection({
         eventDescription: eventDescription.trim(),
         speakerIntro: speakerIntro.trim()
       });
-      pushToast("Event content saved", "success");
+      pushToast("Content saved", "success");
     } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        return;
-      }
+      if (error instanceof UnauthorizedError) return;
       const message = error instanceof Error ? error.message : "Failed to save content";
       pushToast(message, "error");
     } finally {
@@ -143,73 +136,54 @@ export function EventAiContentSection({
     }
   }
 
-  const busy = generating || saving;
-
   return (
-    <div className="space-y-4 rounded-2xl border border-border/70 bg-background/25 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-accent">Event content</p>
-          <p className="mt-1 text-sm text-muted">
-            Generate with AI or type the description and speaker introduction manually.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:shrink-0">
-          <Button
-            type="button"
-            variant={hasGeneratedContent ? "secondary" : "default"}
-            disabled={busy}
-            onClick={() => void handleGenerate()}
-          >
-            {generating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
-            {generating ? "Generating..." : generateLabel}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" size="sm" disabled={busy} onClick={() => void handleGenerate()}>
+          {generating ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" />
+          )}
+          {generating ? "Generating…" : hasContent ? "Regenerate" : "Generate with AI"}
+        </Button>
+        {onSaveContent ? (
+          <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => void handleSaveManual()}>
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {saving ? "Saving…" : "Save content"}
           </Button>
-          {onSaveContent ? (
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => void handleSaveManual()}
-            >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {saving ? "Saving..." : "Save content"}
-            </Button>
-          ) : null}
-        </div>
+        ) : null}
+        <span className="text-xs text-muted">AI optional — you can type below instead</span>
       </div>
 
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="ai-event-description">Event description</Label>
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="ai-event-description" className="text-xs text-muted">
+            Event description
+          </Label>
           <Textarea
             id="ai-event-description"
             value={eventDescription}
             onChange={(event) => setEventDescription(event.target.value)}
-            rows={7}
+            rows={5}
             disabled={busy}
-            placeholder="Write or generate a professional CME event description..."
-            className="resize-y"
+            placeholder="Professional CME description for this session…"
+            className="min-h-[120px] resize-y text-sm"
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="ai-speaker-intro">Speaker introduction</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="ai-speaker-intro" className="text-xs text-muted">
+            Speaker introduction
+          </Label>
           <Textarea
             id="ai-speaker-intro"
             value={speakerIntro}
             onChange={(event) => setSpeakerIntro(event.target.value)}
-            rows={5}
+            rows={4}
             disabled={busy}
-            placeholder="Write or generate a short speaker bio..."
-            className="resize-y"
+            placeholder="Short speaker bio (~100 words)…"
+            className="min-h-[96px] resize-y text-sm"
           />
         </div>
       </div>

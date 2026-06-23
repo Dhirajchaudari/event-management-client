@@ -12,6 +12,9 @@ import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { EventFormValues } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+type FormTab = "details" | "content";
 
 interface EventFormProps {
   initialValues: EventFormValues;
@@ -40,6 +43,31 @@ interface EventFormProps {
   ) => Promise<void>;
 }
 
+function TabButton({
+  active,
+  children,
+  onClick
+}: {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+        active
+          ? "bg-accent/15 text-accent"
+          : "text-muted hover:bg-background/60 hover:text-foreground"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function EventForm({
   initialValues,
   submitLabel,
@@ -55,6 +83,9 @@ export function EventForm({
   onSaveEventContent
 }: EventFormProps): React.JSX.Element {
   const [values, setValues] = useState<EventFormValues>(initialValues);
+  const [activeTab, setActiveTab] = useState<FormTab>("details");
+
+  const hasSavedContent = Boolean(initialAiDescription?.trim() || initialAiSpeakerIntro?.trim());
 
   function updateField<K extends keyof EventFormValues>(key: K, value: EventFormValues[K]): void {
     setValues((current) => ({ ...current, [key]: value }));
@@ -76,73 +107,97 @@ export function EventForm({
   }
 
   return (
-    <form className="space-y-5" onSubmit={(event) => void handleSubmit(event)}>
-      <div className="space-y-2">
-        <Label htmlFor="event-name">Event name</Label>
-        <Input
-          id="event-name"
-          value={values.name}
-          onChange={(event) => updateField("name", event.target.value)}
-          placeholder="Advances in Fetal Medicine"
-          required
-        />
+    <form className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => void handleSubmit(event)}>
+      <div className="flex gap-1 border-b border-border/50 pb-3">
+        <TabButton active={activeTab === "details"} onClick={() => setActiveTab("details")}>
+          Details
+        </TabButton>
+        <TabButton active={activeTab === "content"} onClick={() => setActiveTab("content")}>
+          Content
+          {hasSavedContent ? <span className="h-1.5 w-1.5 rounded-full bg-teal" aria-hidden /> : null}
+        </TabButton>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="event-date">Date</Label>
-        <DateInput
-          id="event-date"
-          value={values.date}
-          onChange={(event) => updateField("date", event.target.value)}
-          required
-        />
-      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto py-4">
+        {activeTab === "details" ? (
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="event-name" className="text-xs text-muted">
+                Event name
+              </Label>
+              <Input
+                id="event-name"
+                value={values.name}
+                onChange={(event) => updateField("name", event.target.value)}
+                placeholder="Advances in Fetal Medicine"
+                required
+              />
+            </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="speaker-name">Speaker</Label>
-          <Input
-            id="speaker-name"
-            value={values.speakerName}
-            onChange={(event) => updateField("speakerName", event.target.value)}
-            placeholder="Dr. Jane Smith"
-            required
+            <div className="space-y-1.5">
+              <Label htmlFor="event-date" className="text-xs text-muted">
+                Date
+              </Label>
+              <DateInput
+                id="event-date"
+                value={values.date}
+                onChange={(event) => updateField("date", event.target.value)}
+                required
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="speaker-name" className="text-xs text-muted">
+                  Speaker
+                </Label>
+                <Input
+                  id="speaker-name"
+                  value={values.speakerName}
+                  onChange={(event) => updateField("speakerName", event.target.value)}
+                  placeholder="Dr. Jane Smith"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="speaker-designation" className="text-xs text-muted">
+                  Designation
+                </Label>
+                <Input
+                  id="speaker-designation"
+                  value={values.speakerDesignation}
+                  onChange={(event) => updateField("speakerDesignation", event.target.value)}
+                  placeholder="Senior Consultant"
+                  required
+                />
+              </div>
+            </div>
+
+            <SpeakerPhotoField
+              speakerName={values.speakerName}
+              photoUrl={values.speakerPhotoUrl}
+              disabled={loading}
+              onChange={(url) => updateField("speakerPhotoUrl", url)}
+              onRemovePersisted={onRemovePersistedPhoto}
+            />
+          </div>
+        ) : null}
+
+        {activeTab === "content" && onEnsureEventSaved ? (
+          <EventAiContentSection
+            key={`${eventId ?? "new"}-${initialAiDescription ?? ""}-${initialAiSpeakerIntro ?? ""}`}
+            eventId={eventId}
+            initialEventDescription={initialAiDescription}
+            initialSpeakerIntro={initialAiSpeakerIntro}
+            getEventContext={getEventContext}
+            onEnsureEventSaved={onEnsureEventSaved}
+            onGenerated={onAiContentGenerated}
+            onSaveContent={onSaveEventContent}
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="speaker-designation">Designation</Label>
-          <Input
-            id="speaker-designation"
-            value={values.speakerDesignation}
-            onChange={(event) => updateField("speakerDesignation", event.target.value)}
-            placeholder="Senior Consultant"
-            required
-          />
-        </div>
+        ) : null}
       </div>
 
-      <SpeakerPhotoField
-        speakerName={values.speakerName}
-        photoUrl={values.speakerPhotoUrl}
-        disabled={loading}
-        onChange={(url) => updateField("speakerPhotoUrl", url)}
-        onRemovePersisted={onRemovePersistedPhoto}
-      />
-
-      {onEnsureEventSaved ? (
-        <EventAiContentSection
-          key={`${eventId ?? "new"}-${initialAiDescription ?? ""}-${initialAiSpeakerIntro ?? ""}`}
-          eventId={eventId}
-          initialEventDescription={initialAiDescription}
-          initialSpeakerIntro={initialAiSpeakerIntro}
-          getEventContext={getEventContext}
-          onEnsureEventSaved={onEnsureEventSaved}
-          onGenerated={onAiContentGenerated}
-          onSaveContent={onSaveEventContent}
-        />
-      ) : null}
-
-      <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+      <div className="flex flex-col-reverse gap-2 border-t border-border/50 pt-4 sm:flex-row sm:justify-end">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>
           Cancel
         </Button>

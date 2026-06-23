@@ -433,13 +433,13 @@ function EventsPageContent(): React.JSX.Element {
       )}
 
       <Dialog open={dialogMode !== null} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[min(90vh,680px)] max-w-lg flex-col gap-3 overflow-hidden p-6">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{dialogMode === "create" ? "Create event" : "Edit event"}</DialogTitle>
             <DialogDescription>
               {dialogMode === "create"
-                ? "Add a new session to your conference lineup."
-                : "Update session details and speaker information."}
+                ? "Add session details, then optional CME content."
+                : "Update details or event content."}
             </DialogDescription>
           </DialogHeader>
           <EventForm
