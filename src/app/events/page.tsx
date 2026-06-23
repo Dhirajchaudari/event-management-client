@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/events/EmptyState";
 import { EventCard } from "@/components/events/EventCard";
@@ -28,6 +28,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { exportEventPdf } from "@/lib/export-pdf";
+import { normalizeEventRecord } from "@/lib/event-graphql";
 import { gqlRequest, UnauthorizedError } from "@/lib/graphql";
 import { toDateInputValue } from "@/lib/format";
 import {
@@ -68,6 +69,7 @@ export default function EventsPage(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
+  const [formSession, setFormSession] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState<EventRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EventRecord | null>(null);
   const [statusTarget, setStatusTarget] = useState<EventRecord | null>(null);
@@ -79,7 +81,7 @@ export default function EventsPage(): React.JSX.Element {
       const data = await gqlRequest<{ events: EventRecord[] }>(
         `query { events { ${EVENT_FIELDS} } }`
       );
-      setEvents(data.events);
+      setEvents(data.events.map(normalizeEventRecord));
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         return;
@@ -97,11 +99,13 @@ export default function EventsPage(): React.JSX.Element {
 
   function openCreateDialog(): void {
     setSelectedEvent(null);
+    setFormSession((current) => current + 1);
     setDialogMode("create");
   }
 
   function openEditDialog(event: EventRecord): void {
     setSelectedEvent(event);
+    setFormSession((current) => current + 1);
     setDialogMode("edit");
   }
 
@@ -110,15 +114,19 @@ export default function EventsPage(): React.JSX.Element {
     setSelectedEvent(null);
   }
 
-  const formInitialValues: EventFormValues = selectedEvent
-    ? {
-        name: selectedEvent.name,
-        date: toDateInputValue(selectedEvent.date),
-        speakerName: selectedEvent.speakerName,
-        speakerDesignation: selectedEvent.speakerDesignation,
-        speakerPhotoUrl: selectedEvent.speakerPhotoUrl ?? ""
-      }
-    : EMPTY_EVENT_FORM;
+  const formInitialValues = useMemo<EventFormValues>(
+    () =>
+      selectedEvent
+        ? {
+            name: selectedEvent.name,
+            date: toDateInputValue(selectedEvent.date),
+            speakerName: selectedEvent.speakerName,
+            speakerDesignation: selectedEvent.speakerDesignation,
+            speakerPhotoUrl: selectedEvent.speakerPhotoUrl ?? ""
+          }
+        : EMPTY_EVENT_FORM,
+    [selectedEvent]
+  );
 
   async function handleSave(values: EventFormValues): Promise<void> {
     setSaving(true);
@@ -202,9 +210,13 @@ export default function EventsPage(): React.JSX.Element {
     }
   }
 
-  function handleExportPdf(event: EventRecord): void {
-    exportEventPdf(event);
-    pushToast("PDF exported", "success");
+  async function handleExportPdf(event: EventRecord): Promise<void> {
+    try {
+      await exportEventPdf(event);
+      pushToast("PDF exported", "success");
+    } catch {
+      pushToast("Failed to export PDF", "error");
+    }
   }
 
   return (
@@ -242,7 +254,7 @@ export default function EventsPage(): React.JSX.Element {
               event={event}
               onEdit={openEditDialog}
               onDelete={setDeleteTarget}
-              onExportPdf={handleExportPdf}
+              onExportPdf={(event) => void handleExportPdf(event)}
               onUpdateStatus={setStatusTarget}
               onViewAttendees={setAttendeesTarget}
             />
@@ -261,7 +273,7 @@ export default function EventsPage(): React.JSX.Element {
             </DialogDescription>
           </DialogHeader>
           <EventForm
-            key={selectedEvent?.id ?? "create"}
+            key={`${dialogMode ?? "closed"}-${formSession}`}
             initialValues={formInitialValues}
             submitLabel={dialogMode === "create" ? "Create event" : "Save changes"}
             loading={saving}

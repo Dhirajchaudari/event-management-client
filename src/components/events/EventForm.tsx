@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,10 +23,6 @@ export function EventForm({
   onCancel
 }: EventFormProps): React.JSX.Element {
   const [values, setValues] = useState<EventFormValues>(initialValues);
-
-  useEffect(() => {
-    setValues(initialValues);
-  }, [initialValues]);
 
   function updateField<K extends keyof EventFormValues>(key: K, value: EventFormValues[K]): void {
     setValues((current) => ({ ...current, [key]: value }));
