@@ -1,11 +1,13 @@
 "use client";
 
 import { Plus, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/events/EmptyState";
+import { EventFiltersBar } from "@/components/events/EventFiltersBar";
 import { EventForm } from "@/components/events/EventForm";
 import { EventTable } from "@/components/events/EventTable";
+import { FilteredEmptyState } from "@/components/events/FilteredEmptyState";
 import { UpdateStatusDialog } from "@/components/events/UpdateStatusDialog";
 import { ViewAttendeesDialog } from "@/components/events/ViewAttendeesDialog";
 import { AppShell } from "@/components/layout/AppShell";
@@ -28,9 +30,11 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { exportEventPdf } from "@/lib/export-pdf";
+import { filterEvents } from "@/lib/event-filters";
 import { normalizeEventRecord } from "@/lib/event-graphql";
 import { gqlRequest, UnauthorizedError } from "@/lib/graphql";
 import { toDateInputValue } from "@/lib/format";
+import { useEventFilters } from "@/hooks/use-event-filters";
 import {
   EMPTY_EVENT_FORM,
   type EventFormValues,
@@ -66,6 +70,27 @@ function buildMutationInput(values: EventFormValues): Record<string, unknown> {
 }
 
 export default function EventsPage(): React.JSX.Element {
+  return (
+    <Suspense
+      fallback={
+        <AppShell title="Event lineup" subtitle="Loading your conference lineup...">
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-16 animate-pulse rounded-[1.75rem] border border-border/50 bg-surface/40"
+              />
+            ))}
+          </div>
+        </AppShell>
+      }
+    >
+      <EventsPageContent />
+    </Suspense>
+  );
+}
+
+function EventsPageContent(): React.JSX.Element {
   const events = useEventsStore((state) => state.events);
   const loading = useEventsStore((state) => state.loading);
   const setEvents = useEventsStore((state) => state.setEvents);
@@ -80,6 +105,22 @@ export default function EventsPage(): React.JSX.Element {
   const [deleteTarget, setDeleteTarget] = useState<EventRecord | null>(null);
   const [statusTarget, setStatusTarget] = useState<EventRecord | null>(null);
   const [attendeesTarget, setAttendeesTarget] = useState<EventRecord | null>(null);
+
+  const {
+    searchInput,
+    setSearchInput,
+    debouncedSearch,
+    statusFilter,
+    dateFilter,
+    setStatusFilter,
+    setDateFilter,
+    clearFilters
+  } = useEventFilters();
+
+  const filteredEvents = useMemo(
+    () => filterEvents(events, debouncedSearch, statusFilter, dateFilter),
+    [events, debouncedSearch, statusFilter, dateFilter]
+  );
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -270,14 +311,31 @@ export default function EventsPage(): React.JSX.Element {
       ) : events.length === 0 ? (
         <EmptyState onCreate={openCreateDialog} />
       ) : (
-        <EventTable
-          events={events}
-          onEdit={openEditDialog}
-          onDelete={setDeleteTarget}
-          onExportPdf={(event) => void handleExportPdf(event)}
-          onUpdateStatus={setStatusTarget}
-          onViewAttendees={setAttendeesTarget}
-        />
+        <div className="space-y-5">
+          <EventFiltersBar
+            search={searchInput}
+            status={statusFilter}
+            date={dateFilter}
+            filteredCount={filteredEvents.length}
+            totalCount={events.length}
+            onSearchChange={setSearchInput}
+            onStatusChange={setStatusFilter}
+            onDateChange={setDateFilter}
+          />
+
+          {filteredEvents.length === 0 ? (
+            <FilteredEmptyState onClearFilters={clearFilters} />
+          ) : (
+            <EventTable
+              events={filteredEvents}
+              onEdit={openEditDialog}
+              onDelete={setDeleteTarget}
+              onExportPdf={(event) => void handleExportPdf(event)}
+              onUpdateStatus={setStatusTarget}
+              onViewAttendees={setAttendeesTarget}
+            />
+          )}
+        </div>
       )}
 
       <Dialog open={dialogMode !== null} onOpenChange={(open) => !open && closeDialog()}>
