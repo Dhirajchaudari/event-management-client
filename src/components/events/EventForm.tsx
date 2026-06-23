@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { SpeakerPhotoField } from "@/components/events/SpeakerPhotoField";
+import { EventAiContentSection } from "@/components/events/EventAiContentSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,18 +13,29 @@ interface EventFormProps {
   initialValues: EventFormValues;
   submitLabel: string;
   loading?: boolean;
+  eventId?: string;
+  initialAiDescription?: string;
+  initialAiSpeakerIntro?: string;
   onSubmit: (values: EventFormValues) => Promise<void>;
   onCancel: () => void;
   onRemovePersistedPhoto?: () => Promise<void>;
+  onAiContentGenerated?: (content: {
+    eventDescription: string;
+    speakerIntro: string;
+  }) => void;
 }
 
 export function EventForm({
   initialValues,
   submitLabel,
   loading = false,
+  eventId,
+  initialAiDescription,
+  initialAiSpeakerIntro,
   onSubmit,
   onCancel,
-  onRemovePersistedPhoto
+  onRemovePersistedPhoto,
+  onAiContentGenerated
 }: EventFormProps): React.JSX.Element {
   const [values, setValues] = useState<EventFormValues>(initialValues);
 
@@ -90,6 +102,16 @@ export function EventForm({
         onChange={(url) => updateField("speakerPhotoUrl", url)}
         onRemovePersisted={onRemovePersistedPhoto}
       />
+
+      {eventId ? (
+        <EventAiContentSection
+          key={`${eventId}-${initialAiDescription ?? ""}-${initialAiSpeakerIntro ?? ""}`}
+          eventId={eventId}
+          initialEventDescription={initialAiDescription}
+          initialSpeakerIntro={initialAiSpeakerIntro}
+          onGenerated={onAiContentGenerated}
+        />
+      ) : null}
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>

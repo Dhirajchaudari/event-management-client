@@ -53,6 +53,9 @@ const EVENT_FIELDS = `
   speakerPhotoUrl
   status
   attendeeCount
+  aiDescription
+  aiSpeakerIntro
+  aiGeneratedAt
   createdAt
   updatedAt
 `;
@@ -339,7 +342,7 @@ function EventsPageContent(): React.JSX.Element {
       )}
 
       <Dialog open={dialogMode !== null} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{dialogMode === "create" ? "Create event" : "Edit event"}</DialogTitle>
             <DialogDescription>
@@ -353,6 +356,9 @@ function EventsPageContent(): React.JSX.Element {
             initialValues={formInitialValues}
             submitLabel={dialogMode === "create" ? "Create event" : "Save changes"}
             loading={saving}
+            eventId={dialogMode === "edit" && selectedEvent ? selectedEvent.id : undefined}
+            initialAiDescription={selectedEvent?.aiDescription ?? undefined}
+            initialAiSpeakerIntro={selectedEvent?.aiSpeakerIntro ?? undefined}
             onSubmit={handleSave}
             onCancel={closeDialog}
             onRemovePersistedPhoto={
@@ -360,6 +366,25 @@ function EventsPageContent(): React.JSX.Element {
                 ? () => persistSpeakerPhotoRemoval(selectedEvent.id)
                 : undefined
             }
+            onAiContentGenerated={(content) => {
+              if (!selectedEvent) return;
+              const generatedAt = new Date().toISOString();
+              updateEvent(selectedEvent.id, {
+                aiDescription: content.eventDescription,
+                aiSpeakerIntro: content.speakerIntro,
+                aiGeneratedAt: generatedAt
+              });
+              setSelectedEvent((current) =>
+                current?.id === selectedEvent.id
+                  ? {
+                      ...current,
+                      aiDescription: content.eventDescription,
+                      aiSpeakerIntro: content.speakerIntro,
+                      aiGeneratedAt: generatedAt
+                    }
+                  : current
+              );
+            }}
           />
         </DialogContent>
       </Dialog>
