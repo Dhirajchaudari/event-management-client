@@ -36,6 +36,8 @@ npm run seed:admin
 npm run dev
 ```
 
+Set Cloudinary vars in server `.env` (same account as product-farming). Speaker photos upload to `onference-events/speakers`.
+
 Default admin: `admin@orbitalops.net` / `EventAdmin@123`
 
 ## Routes

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { SpeakerPhotoField } from "@/components/events/SpeakerPhotoField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,16 +81,12 @@ export function EventForm({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="speaker-photo-url">Speaker photo URL</Label>
-        <Input
-          id="speaker-photo-url"
-          type="url"
-          value={values.speakerPhotoUrl}
-          onChange={(event) => updateField("speakerPhotoUrl", event.target.value)}
-          placeholder="https://..."
-        />
-      </div>
+      <SpeakerPhotoField
+        speakerName={values.speakerName}
+        photoUrl={values.speakerPhotoUrl}
+        disabled={loading}
+        onChange={(url) => updateField("speakerPhotoUrl", url)}
+      />
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>
