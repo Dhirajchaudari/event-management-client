@@ -9,22 +9,43 @@ import { Textarea } from "@/components/ui/textarea";
 import { gqlRequest, UnauthorizedError } from "@/lib/graphql";
 import { pushToast } from "@/store/toast.store";
 
-interface GeneratedEventContent {
+export interface GeneratedEventContent {
   eventDescription: string;
   speakerIntro: string;
 }
 
+export interface EventAiContext {
+  name: string;
+  date: string;
+  speakerName: string;
+  speakerDesignation: string;
+  speakerPhotoUrl?: string;
+}
+
 interface EventAiContentSectionProps {
-  eventId: string;
+  eventId?: string;
   initialEventDescription?: string;
   initialSpeakerIntro?: string;
-  onGenerated?: (content: GeneratedEventContent) => void;
+  getEventContext: () => EventAiContext;
+  onEnsureEventSaved: (context: EventAiContext) => Promise<string>;
+  onGenerated?: (eventId: string, content: GeneratedEventContent) => void;
+}
+
+function isContextReady(context: EventAiContext): boolean {
+  return (
+    context.name.trim() !== "" &&
+    context.date.trim() !== "" &&
+    context.speakerName.trim() !== "" &&
+    context.speakerDesignation.trim() !== ""
+  );
 }
 
 export function EventAiContentSection({
   eventId,
   initialEventDescription = "",
   initialSpeakerIntro = "",
+  getEventContext,
+  onEnsureEventSaved,
   onGenerated
 }: EventAiContentSectionProps): React.JSX.Element {
   const [eventDescription, setEventDescription] = useState(initialEventDescription);
@@ -35,8 +56,17 @@ export function EventAiContentSection({
   const buttonLabel = hasContent ? "Regenerate" : "Generate with AI";
 
   async function handleGenerate(): Promise<void> {
+    const context = getEventContext();
+
+    if (!isContextReady(context)) {
+      pushToast("Fill in event name, date, and speaker details first", "error");
+      return;
+    }
+
     setGenerating(true);
     try {
+      const resolvedEventId = eventId ?? (await onEnsureEventSaved(context));
+
       const data = await gqlRequest<{ generateEventContent: GeneratedEventContent }>(
         `mutation GenerateEventContent($eventId: ID!) {
           generateEventContent(eventId: $eventId) {
@@ -44,12 +74,12 @@ export function EventAiContentSection({
             speakerIntro
           }
         }`,
-        { eventId }
+        { eventId: resolvedEventId }
       );
 
       setEventDescription(data.generateEventContent.eventDescription);
       setSpeakerIntro(data.generateEventContent.speakerIntro);
-      onGenerated?.(data.generateEventContent);
+      onGenerated?.(resolvedEventId, data.generateEventContent);
       pushToast("Content generated successfully", "success");
     } catch (error) {
       if (error instanceof UnauthorizedError) {

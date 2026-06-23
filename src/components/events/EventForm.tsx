@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 
+import {
+  EventAiContentSection,
+  type EventAiContext
+} from "@/components/events/EventAiContentSection";
 import { SpeakerPhotoField } from "@/components/events/SpeakerPhotoField";
-import { EventAiContentSection } from "@/components/events/EventAiContentSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,10 +22,14 @@ interface EventFormProps {
   onSubmit: (values: EventFormValues) => Promise<void>;
   onCancel: () => void;
   onRemovePersistedPhoto?: () => Promise<void>;
-  onAiContentGenerated?: (content: {
-    eventDescription: string;
-    speakerIntro: string;
-  }) => void;
+  onEnsureEventSaved?: (context: EventAiContext) => Promise<string>;
+  onAiContentGenerated?: (
+    eventId: string,
+    content: {
+      eventDescription: string;
+      speakerIntro: string;
+    }
+  ) => void;
 }
 
 export function EventForm({
@@ -35,12 +42,23 @@ export function EventForm({
   onSubmit,
   onCancel,
   onRemovePersistedPhoto,
+  onEnsureEventSaved,
   onAiContentGenerated
 }: EventFormProps): React.JSX.Element {
   const [values, setValues] = useState<EventFormValues>(initialValues);
 
   function updateField<K extends keyof EventFormValues>(key: K, value: EventFormValues[K]): void {
     setValues((current) => ({ ...current, [key]: value }));
+  }
+
+  function getEventContext(): EventAiContext {
+    return {
+      name: values.name,
+      date: values.date,
+      speakerName: values.speakerName,
+      speakerDesignation: values.speakerDesignation,
+      speakerPhotoUrl: values.speakerPhotoUrl.trim() || undefined
+    };
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
@@ -103,12 +121,14 @@ export function EventForm({
         onRemovePersisted={onRemovePersistedPhoto}
       />
 
-      {eventId ? (
+      {onEnsureEventSaved ? (
         <EventAiContentSection
-          key={`${eventId}-${initialAiDescription ?? ""}-${initialAiSpeakerIntro ?? ""}`}
+          key={`${eventId ?? "new"}-${initialAiDescription ?? ""}-${initialAiSpeakerIntro ?? ""}`}
           eventId={eventId}
           initialEventDescription={initialAiDescription}
           initialSpeakerIntro={initialAiSpeakerIntro}
+          getEventContext={getEventContext}
+          onEnsureEventSaved={onEnsureEventSaved}
           onGenerated={onAiContentGenerated}
         />
       ) : null}

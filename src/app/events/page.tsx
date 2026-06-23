@@ -41,6 +41,7 @@ import {
   type EventRecord,
   type EventStatus
 } from "@/lib/types";
+import type { EventAiContext } from "@/components/events/EventAiContentSection";
 import { useEventsStore } from "@/store/events.store";
 import { pushToast } from "@/store/toast.store";
 
@@ -192,11 +193,56 @@ function EventsPageContent(): React.JSX.Element {
     );
   }
 
+  async function ensureEventSavedForAi(context: EventAiContext): Promise<string> {
+    const input = {
+      name: context.name.trim(),
+      date: context.date,
+      speakerName: context.speakerName.trim(),
+      speakerDesignation: context.speakerDesignation.trim(),
+      ...(context.speakerPhotoUrl ? { speakerPhotoUrl: context.speakerPhotoUrl } : {})
+    };
+
+    if (selectedEvent?.id) {
+      const data = await gqlRequest<{ updateEvent: EventRecord }>(
+        `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
+          updateEvent(id: $id, input: $input) {
+            ${EVENT_FIELDS}
+          }
+        }`,
+        { id: selectedEvent.id, input }
+      );
+      const updated = normalizeEventRecord(data.updateEvent);
+      updateEvent(updated.id, updated);
+      setSelectedEvent(updated);
+      return updated.id;
+    }
+
+    const data = await gqlRequest<{ createEvent: EventRecord }>(
+      `mutation CreateEvent($input: CreateEventInput!) {
+        createEvent(input: $input) {
+          ${EVENT_FIELDS}
+        }
+      }`,
+      { input }
+    );
+    const created = normalizeEventRecord(data.createEvent);
+    setEvents(
+      [...events, created].sort(
+        (left, right) => new Date(left.date).getTime() - new Date(right.date).getTime()
+      )
+    );
+    setSelectedEvent(created);
+    setDialogMode("edit");
+    return created.id;
+  }
+
   async function handleSave(values: EventFormValues): Promise<void> {
     setSaving(true);
     try {
       const input = buildMutationInput(values);
-      if (dialogMode === "create") {
+      const existingEventId = selectedEvent?.id;
+
+      if (dialogMode === "create" && !existingEventId) {
         await gqlRequest(
           `mutation CreateEvent($input: CreateEventInput!) {
             createEvent(input: $input) { id }
@@ -204,14 +250,14 @@ function EventsPageContent(): React.JSX.Element {
           { input }
         );
         pushToast("Event created", "success");
-      } else if (dialogMode === "edit" && selectedEvent) {
+      } else if (existingEventId) {
         await gqlRequest(
           `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
             updateEvent(id: $id, input: $input) { id }
           }`,
-          { id: selectedEvent.id, input }
+          { id: existingEventId, input }
         );
-        pushToast("Event updated", "success");
+        pushToast(dialogMode === "create" ? "Event created" : "Event updated", "success");
       }
       closeDialog();
       await loadEvents();
@@ -354,28 +400,30 @@ function EventsPageContent(): React.JSX.Element {
           <EventForm
             key={`${dialogMode ?? "closed"}-${formSession}`}
             initialValues={formInitialValues}
-            submitLabel={dialogMode === "create" ? "Create event" : "Save changes"}
+            submitLabel={
+              dialogMode === "create" && !selectedEvent?.id ? "Create event" : "Save changes"
+            }
             loading={saving}
-            eventId={dialogMode === "edit" && selectedEvent ? selectedEvent.id : undefined}
+            eventId={selectedEvent?.id}
             initialAiDescription={selectedEvent?.aiDescription ?? undefined}
             initialAiSpeakerIntro={selectedEvent?.aiSpeakerIntro ?? undefined}
             onSubmit={handleSave}
             onCancel={closeDialog}
+            onEnsureEventSaved={ensureEventSavedForAi}
             onRemovePersistedPhoto={
-              dialogMode === "edit" && selectedEvent
+              selectedEvent?.id
                 ? () => persistSpeakerPhotoRemoval(selectedEvent.id)
                 : undefined
             }
-            onAiContentGenerated={(content) => {
-              if (!selectedEvent) return;
+            onAiContentGenerated={(eventId, content) => {
               const generatedAt = new Date().toISOString();
-              updateEvent(selectedEvent.id, {
+              updateEvent(eventId, {
                 aiDescription: content.eventDescription,
                 aiSpeakerIntro: content.speakerIntro,
                 aiGeneratedAt: generatedAt
               });
               setSelectedEvent((current) =>
-                current?.id === selectedEvent.id
+                current?.id === eventId
                   ? {
                       ...current,
                       aiDescription: content.eventDescription,
