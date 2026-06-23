@@ -84,6 +84,17 @@ export function EventForm({
         </div>
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="speaker-photo-url">Speaker photo URL</Label>
+        <Input
+          id="speaker-photo-url"
+          type="url"
+          value={values.speakerPhotoUrl}
+          onChange={(event) => updateField("speakerPhotoUrl", event.target.value)}
+          placeholder="https://..."
+        />
+      </div>
+
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={loading}>
           Cancel

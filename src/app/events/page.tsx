@@ -1,11 +1,13 @@
 "use client";
 
 import { Plus, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/events/EmptyState";
 import { EventCard } from "@/components/events/EventCard";
 import { EventForm } from "@/components/events/EventForm";
+import { UpdateStatusDialog } from "@/components/events/UpdateStatusDialog";
+import { ViewAttendeesDialog } from "@/components/events/ViewAttendeesDialog";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   AlertDialog,
@@ -25,16 +27,41 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { exportEventPdf } from "@/lib/export-pdf";
 import { gqlRequest, UnauthorizedError } from "@/lib/graphql";
-import { getMonthGroupKey, toDateInputValue } from "@/lib/format";
+import { toDateInputValue } from "@/lib/format";
 import {
   EMPTY_EVENT_FORM,
   type EventFormValues,
-  type EventRecord
+  type EventRecord,
+  type EventStatus
 } from "@/lib/types";
 import { pushToast } from "@/store/toast.store";
 
+const EVENT_FIELDS = `
+  id
+  name
+  date
+  speakerName
+  speakerDesignation
+  speakerPhotoUrl
+  status
+  attendeeCount
+  createdAt
+  updatedAt
+`;
+
 type DialogMode = "create" | "edit" | null;
+
+function buildMutationInput(values: EventFormValues): Record<string, unknown> {
+  return {
+    name: values.name,
+    date: values.date,
+    speakerName: values.speakerName,
+    speakerDesignation: values.speakerDesignation,
+    speakerPhotoUrl: values.speakerPhotoUrl.trim()
+  };
+}
 
 export default function EventsPage(): React.JSX.Element {
   const [events, setEvents] = useState<EventRecord[]>([]);
@@ -43,22 +70,14 @@ export default function EventsPage(): React.JSX.Element {
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [selectedEvent, setSelectedEvent] = useState<EventRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EventRecord | null>(null);
+  const [statusTarget, setStatusTarget] = useState<EventRecord | null>(null);
+  const [attendeesTarget, setAttendeesTarget] = useState<EventRecord | null>(null);
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
     try {
       const data = await gqlRequest<{ events: EventRecord[] }>(
-        `query {
-          events {
-            id
-            name
-            date
-            speakerName
-            speakerDesignation
-            createdAt
-            updatedAt
-          }
-        }`
+        `query { events { ${EVENT_FIELDS} } }`
       );
       setEvents(data.events);
     } catch (error) {
@@ -75,17 +94,6 @@ export default function EventsPage(): React.JSX.Element {
   useEffect(() => {
     void loadEvents();
   }, [loadEvents]);
-
-  const groupedEvents = useMemo(() => {
-    const groups = new Map<string, EventRecord[]>();
-    for (const event of events) {
-      const key = getMonthGroupKey(event.date);
-      const list = groups.get(key) ?? [];
-      list.push(event);
-      groups.set(key, list);
-    }
-    return Array.from(groups.entries());
-  }, [events]);
 
   function openCreateDialog(): void {
     setSelectedEvent(null);
@@ -107,19 +115,21 @@ export default function EventsPage(): React.JSX.Element {
         name: selectedEvent.name,
         date: toDateInputValue(selectedEvent.date),
         speakerName: selectedEvent.speakerName,
-        speakerDesignation: selectedEvent.speakerDesignation
+        speakerDesignation: selectedEvent.speakerDesignation,
+        speakerPhotoUrl: selectedEvent.speakerPhotoUrl ?? ""
       }
     : EMPTY_EVENT_FORM;
 
   async function handleSave(values: EventFormValues): Promise<void> {
     setSaving(true);
     try {
+      const input = buildMutationInput(values);
       if (dialogMode === "create") {
         await gqlRequest(
           `mutation CreateEvent($input: CreateEventInput!) {
             createEvent(input: $input) { id }
           }`,
-          { input: values }
+          { input }
         );
         pushToast("Event created", "success");
       } else if (dialogMode === "edit" && selectedEvent) {
@@ -127,7 +137,7 @@ export default function EventsPage(): React.JSX.Element {
           `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
             updateEvent(id: $id, input: $input) { id }
           }`,
-          { id: selectedEvent.id, input: values }
+          { id: selectedEvent.id, input }
         );
         pushToast("Event updated", "success");
       }
@@ -168,6 +178,35 @@ export default function EventsPage(): React.JSX.Element {
     }
   }
 
+  async function handleStatusSave(status: EventStatus): Promise<void> {
+    if (!statusTarget) return;
+    setSaving(true);
+    try {
+      await gqlRequest(
+        `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
+          updateEvent(id: $id, input: $input) { id }
+        }`,
+        { id: statusTarget.id, input: { status } }
+      );
+      pushToast("Status updated", "success");
+      setStatusTarget(null);
+      await loadEvents();
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Failed to update status";
+      pushToast(message, "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleExportPdf(event: EventRecord): void {
+    exportEventPdf(event);
+    pushToast("PDF exported", "success");
+  }
+
   return (
     <AppShell
       title="Event lineup"
@@ -185,38 +224,28 @@ export default function EventsPage(): React.JSX.Element {
       }
     >
       {loading && events.length === 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               key={index}
-              className="h-44 animate-pulse rounded-[1.75rem] border border-border/50 bg-surface/40"
+              className="h-72 animate-pulse rounded-[1.75rem] border border-border/50 bg-surface/40"
             />
           ))}
         </div>
       ) : events.length === 0 ? (
         <EmptyState onCreate={openCreateDialog} />
       ) : (
-        <div className="space-y-10">
-          {groupedEvents.map(([month, monthEvents]) => (
-            <section key={month}>
-              <div className="mb-4 flex items-center gap-3">
-                <h2 className="font-display text-xl font-semibold text-foreground">{month}</h2>
-                <div className="h-px flex-1 bg-border/70" />
-                <span className="text-xs uppercase tracking-[0.18em] text-muted">
-                  {monthEvents.length} event{monthEvents.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                {monthEvents.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    onEdit={openEditDialog}
-                    onDelete={setDeleteTarget}
-                  />
-                ))}
-              </div>
-            </section>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          {events.map((event) => (
+            <EventCard
+              key={event.id}
+              event={event}
+              onEdit={openEditDialog}
+              onDelete={setDeleteTarget}
+              onExportPdf={handleExportPdf}
+              onUpdateStatus={setStatusTarget}
+              onViewAttendees={setAttendeesTarget}
+            />
           ))}
         </div>
       )}
@@ -241,6 +270,15 @@ export default function EventsPage(): React.JSX.Element {
           />
         </DialogContent>
       </Dialog>
+
+      <UpdateStatusDialog
+        event={statusTarget}
+        loading={saving}
+        onClose={() => setStatusTarget(null)}
+        onSave={handleStatusSave}
+      />
+
+      <ViewAttendeesDialog event={attendeesTarget} onClose={() => setAttendeesTarget(null)} />
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

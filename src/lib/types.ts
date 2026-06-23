@@ -1,5 +1,9 @@
 export type UserRole = "admin" | "user";
 
+export type EventStatus = "draft" | "published" | "completed" | "cancelled";
+
+export const EVENT_STATUSES: EventStatus[] = ["draft", "published", "completed", "cancelled"];
+
 export interface SessionUser {
   id: string;
   email: string;
@@ -12,6 +16,9 @@ export interface EventRecord {
   date: string;
   speakerName: string;
   speakerDesignation: string;
+  speakerPhotoUrl?: string | null;
+  status: EventStatus;
+  attendeeCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -21,11 +28,13 @@ export interface EventFormValues {
   date: string;
   speakerName: string;
   speakerDesignation: string;
+  speakerPhotoUrl: string;
 }
 
 export const EMPTY_EVENT_FORM: EventFormValues = {
   name: "",
   date: "",
   speakerName: "",
-  speakerDesignation: ""
+  speakerDesignation: "",
+  speakerPhotoUrl: ""
 };
