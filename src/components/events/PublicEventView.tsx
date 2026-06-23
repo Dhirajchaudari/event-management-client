@@ -1,7 +1,16 @@
 "use client";
 
-import { CalendarDays, FileDown, Sparkles, UserRound, Users } from "lucide-react";
-import { useState } from "react";
+import {
+  BookOpen,
+  CalendarDays,
+  CheckCircle2,
+  FileDown,
+  MapPin,
+  Sparkles,
+  UserRound,
+  Users
+} from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { PublicRsvpDialog } from "@/components/events/PublicRsvpDialog";
 import { ShareEventMenu } from "@/components/events/ShareEventMenu";
@@ -11,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { exportEventPdf } from "@/lib/export-pdf";
 import { getEventStatusClassName, getEventStatusLabel } from "@/lib/event-status";
-import { formatEventDate, getInitials } from "@/lib/format";
+import { formatEventDate, formatEventTime, getInitials } from "@/lib/format";
 import type { EventRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { pushToast } from "@/store/toast.store";
@@ -19,6 +28,24 @@ import { pushToast } from "@/store/toast.store";
 interface PublicEventViewProps {
   event: EventRecord;
   onRsvpSuccess?: () => void;
+}
+
+function buildHighlights(description: string): string[] {
+  const sentences = description
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 24);
+
+  if (sentences.length >= 3) {
+    return sentences.slice(0, 4);
+  }
+
+  return [
+    "Evidence-based clinical updates from a leading specialist",
+    "Practical protocols you can apply in your next shift or clinic",
+    "Live Q&A and peer discussion with fellow clinicians",
+    "Certificate-friendly session designed for busy medical teams"
+  ];
 }
 
 function SpeakerCard({ event }: { event: EventRecord }): React.JSX.Element {
@@ -71,6 +98,10 @@ export function PublicEventView({ event, onRsvpSuccess }: PublicEventViewProps):
   const [exporting, setExporting] = useState(false);
 
   const description = event.aiDescription?.trim();
+  const highlights = useMemo(
+    () => buildHighlights(description ?? event.name),
+    [description, event.name]
+  );
 
   async function handleExportPdf(): Promise<void> {
     setExporting(true);
@@ -111,9 +142,17 @@ export function PublicEventView({ event, onRsvpSuccess }: PublicEventViewProps):
             {event.name}
           </h1>
 
-          <div className="mt-5 inline-flex items-center gap-2.5 rounded-2xl border border-border/60 bg-background/40 px-4 py-2.5 text-sm text-foreground sm:text-base">
-            <CalendarDays className="h-4 w-4 shrink-0 text-accent" />
-            <span>{formatEventDate(event.date)}</span>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <div className="inline-flex items-center gap-2.5 rounded-2xl border border-border/60 bg-background/40 px-4 py-2.5 text-sm text-foreground sm:text-base">
+              <CalendarDays className="h-4 w-4 shrink-0 text-accent" />
+              <span>
+                {formatEventDate(event.date)} · {formatEventTime(event.date)}
+              </span>
+            </div>
+            <div className="inline-flex items-center gap-2.5 rounded-2xl border border-border/60 bg-background/40 px-4 py-2.5 text-sm text-muted">
+              <MapPin className="h-4 w-4 shrink-0 text-teal" />
+              <span>Virtual session · Onference Event Studio</span>
+            </div>
           </div>
         </div>
 
@@ -156,32 +195,68 @@ export function PublicEventView({ event, onRsvpSuccess }: PublicEventViewProps):
             </section>
           )}
 
-          <section className="rounded-[1.5rem] border border-border/60 bg-background/30 p-5 sm:hidden">
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">Share this event</p>
-            <div className="mt-3">
-              <ShareEventMenu event={event} size="default" className="w-full" />
+          <section className="rounded-[1.5rem] border border-border/70 bg-surface/70 p-6 sm:p-8">
+            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted">
+              <BookOpen className="h-3.5 w-3.5 text-teal" />
+              What you&apos;ll take away
             </div>
+            <ul className="mt-5 space-y-3">
+              {highlights.map((item) => (
+                <li key={item} className="flex items-start gap-3 text-sm leading-relaxed text-foreground/90 sm:text-[0.95rem]">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="rounded-[1.5rem] border border-border/70 bg-surface/70 p-6 sm:p-8">
+            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted">
+              <Users className="h-3.5 w-3.5 text-accent" />
+              Who should attend
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-foreground/90 sm:text-[0.95rem]">
+              This session is designed for consultants, residents, nursing leads, and allied health
+              professionals working in {event.speakerDesignation.toLowerCase().includes("medicine") ? "acute and specialist care" : "clinical practice"} who want
+              practical updates from {event.speakerName}.
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-muted">
+              Whether you are building a departmental teaching plan or attending independently, you
+              will leave with clear protocols, discussion points, and resources to share with your
+              team.
+            </p>
           </section>
         </div>
 
-        <aside className="lg:sticky lg:top-6">
+        <aside className="space-y-6 lg:sticky lg:top-6">
           <SpeakerCard event={event} />
 
-          <section className="mt-6 hidden rounded-[1.5rem] border border-border/60 bg-background/30 p-5 sm:block">
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">Share this event</p>
-            <p className="mt-2 text-sm text-muted">Invite colleagues via link, email, or social.</p>
-            <div className="mt-4">
-              <ShareEventMenu event={event} size="default" className="w-full" />
-            </div>
+          <section className="rounded-[1.5rem] border border-border/60 bg-background/30 p-5">
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">Event details</p>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Date</dt>
+                <dd className="text-right font-medium text-foreground">{formatEventDate(event.date)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Format</dt>
+                <dd className="text-right font-medium text-foreground">Live virtual session</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Registrations</dt>
+                <dd className="text-right font-medium text-foreground">{event.attendeeCount} clinicians</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Hosted by</dt>
+                <dd className="text-right font-medium text-foreground">Onference Event Studio</dd>
+              </div>
+            </dl>
+            <Button className="mt-5 w-full" onClick={() => setRsvpOpen(true)}>
+              Reserve your seat
+            </Button>
           </section>
         </aside>
       </div>
-
-      <footer className="mt-12 border-t border-border/60 pt-8 text-center">
-        <p className="text-xs text-muted">
-          Hosted on <span className="text-foreground/80">Onference Event Studio</span>
-        </p>
-      </footer>
 
       <PublicRsvpDialog
         event={event}

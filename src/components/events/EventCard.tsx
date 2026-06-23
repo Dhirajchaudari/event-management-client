@@ -4,15 +4,18 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   CalendarDays,
   CalendarPlus,
+  Check,
   ChevronRight,
   CircleDot,
   ExternalLink,
   FileDown,
   MoreHorizontal,
   Pencil,
+  Send,
   Trash2,
   UserRound,
-  Users
+  Users,
+  X
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -22,17 +25,23 @@ import { formatCreatedDate, formatEventDate, getInitials } from "@/lib/format";
 import type { BentoLayout } from "@/lib/event-bento";
 import { getEventStatusClassName, getEventStatusLabel } from "@/lib/event-status";
 import type { EventRecord } from "@/lib/types";
+import { getPublicEventPath } from "@/lib/event-slug";
 import { cn } from "@/lib/utils";
 
 interface EventCardProps {
   event: EventRecord;
   layout?: BentoLayout;
   className?: string;
+  isAdmin?: boolean;
   onEdit: (event: EventRecord) => void;
   onDelete: (event: EventRecord) => void;
   onExportPdf: (event: EventRecord) => void;
   onUpdateStatus: (event: EventRecord) => void;
   onViewAttendees: (event: EventRecord) => void;
+  onSubmitForApproval?: (event: EventRecord) => void;
+  onApprove?: (event: EventRecord) => void;
+  onReject?: (event: EventRecord) => void;
+  reviewLoading?: boolean;
 }
 
 function EventStatusPill({ status }: { status: EventRecord["status"] }): React.JSX.Element {
@@ -48,23 +57,63 @@ function EventStatusPill({ status }: { status: EventRecord["status"] }): React.J
   );
 }
 
+function EventReviewBar({
+  event,
+  loading = false,
+  onApprove,
+  onReject
+}: {
+  event: EventRecord;
+  loading?: boolean;
+  onApprove: (event: EventRecord) => void;
+  onReject: (event: EventRecord) => void;
+}): React.JSX.Element {
+  return (
+    <div className="rounded-2xl border border-amber/25 bg-amber/5 p-4">
+      <p className="text-sm font-medium text-foreground">Organizer submitted for review</p>
+      <p className="mt-1 text-xs leading-relaxed text-muted">
+        Approve to publish on the public site, or send back as a draft so the organizer can revise.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button size="sm" disabled={loading} onClick={() => onApprove(event)}>
+          <Check className="h-4 w-4" />
+          Approve & publish
+        </Button>
+        <Button size="sm" variant="secondary" disabled={loading} onClick={() => onReject(event)}>
+          <X className="h-4 w-4" />
+          Send back to draft
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function EventCardActions({
   event,
+  isAdmin = false,
   onEdit,
   onDelete,
   onExportPdf,
   onUpdateStatus,
   onViewAttendees,
+  onSubmitForApproval,
   className
 }: Pick<
   EventCardProps,
-  "event" | "onEdit" | "onDelete" | "onExportPdf" | "onUpdateStatus" | "onViewAttendees"
+  | "event"
+  | "isAdmin"
+  | "onEdit"
+  | "onDelete"
+  | "onExportPdf"
+  | "onUpdateStatus"
+  | "onViewAttendees"
+  | "onSubmitForApproval"
 > & { className?: string }): React.JSX.Element {
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <Button variant="secondary" size="icon" asChild>
         <a
-          href={`/events/${event.id}`}
+          href={getPublicEventPath(event)}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`View public page for ${event.name}`}
@@ -93,7 +142,7 @@ function EventCardActions({
             <DropdownMenu.Item
               className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground outline-none hover:bg-background"
               onSelect={() => {
-                window.open(`/events/${event.id}`, "_blank", "noopener,noreferrer");
+                window.open(getPublicEventPath(event), "_blank", "noopener,noreferrer");
               }}
             >
               <ExternalLink className="h-4 w-4 text-muted" />
@@ -106,12 +155,21 @@ function EventCardActions({
               <FileDown className="h-4 w-4 text-muted" />
               Export PDF
             </DropdownMenu.Item>
+            {!isAdmin && event.status === "draft" && onSubmitForApproval ? (
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground outline-none hover:bg-background"
+                onSelect={() => onSubmitForApproval(event)}
+              >
+                <Send className="h-4 w-4 text-muted" />
+                Submit for approval
+              </DropdownMenu.Item>
+            ) : null}
             <DropdownMenu.Item
               className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground outline-none hover:bg-background"
               onSelect={() => onUpdateStatus(event)}
             >
               <CircleDot className="h-4 w-4 text-muted" />
-              Update status
+              {isAdmin ? "Update status" : "Approval status"}
             </DropdownMenu.Item>
             <DropdownMenu.Item
               className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm text-foreground outline-none hover:bg-background"
@@ -294,20 +352,27 @@ export function EventCard({
   event,
   layout = "default",
   className,
+  isAdmin = false,
   onEdit,
   onDelete,
   onExportPdf,
   onUpdateStatus,
-  onViewAttendees
+  onViewAttendees,
+  onSubmitForApproval,
+  onApprove,
+  onReject,
+  reviewLoading = false
 }: EventCardProps): React.JSX.Element {
   const description = event.aiDescription?.trim();
   const isHero = layout === "hero";
+  const needsReview = isAdmin && event.status === "pending_approval" && onApprove && onReject;
 
   return (
     <article
       className={cn(
         "group flex flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-surface/70 backdrop-blur-sm transition duration-300",
         "hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-[0_24px_60px_-30px_rgba(232,165,75,0.45)]",
+        needsReview && "border-amber/35 ring-1 ring-amber/15",
         className
       )}
     >
@@ -332,13 +397,24 @@ export function EventCard({
           <AttendeeSummary event={event} onViewAttendees={onViewAttendees} />
         </div>
 
+        {needsReview ? (
+          <EventReviewBar
+            event={event}
+            loading={reviewLoading}
+            onApprove={onApprove}
+            onReject={onReject}
+          />
+        ) : null}
+
         <EventCardActions
           event={event}
+          isAdmin={isAdmin}
           onEdit={onEdit}
           onDelete={onDelete}
           onExportPdf={onExportPdf}
           onUpdateStatus={onUpdateStatus}
           onViewAttendees={onViewAttendees}
+          onSubmitForApproval={onSubmitForApproval}
           className="pt-1"
         />
       </div>

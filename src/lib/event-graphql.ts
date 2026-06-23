@@ -1,8 +1,22 @@
 import { EVENT_STATUSES, type EventRecord, type EventStatus } from "@/lib/types";
 import { gqlPublicRequest } from "@/lib/public-graphql";
+import { slugifyEventName } from "@/lib/event-slug";
+
+export type PublicEventLookupCode =
+  | "OK"
+  | "NOT_FOUND"
+  | "NOT_PUBLISHED"
+  | "PENDING_APPROVAL";
+
+export interface PublicEventLookupResult {
+  code: PublicEventLookupCode;
+  event?: EventRecord | null;
+  status?: EventStatus | null;
+}
 
 export const PUBLIC_EVENT_FIELDS = `
   id
+  slug
   name
   date
   speakerName
@@ -17,24 +31,46 @@ export const PUBLIC_EVENT_FIELDS = `
   updatedAt
 `;
 
-export async function fetchPublicEvent(id: string): Promise<EventRecord | null> {
-  const data = await gqlPublicRequest<{ getPublicEvent: EventRecord | null }>(
-    `query GetPublicEvent($id: ID!) {
-      getPublicEvent(id: $id) {
-        ${PUBLIC_EVENT_FIELDS}
+export async function lookupPublicEvent(slug: string): Promise<PublicEventLookupResult> {
+  const data = await gqlPublicRequest<{
+    publicEventLookup: {
+      code: PublicEventLookupCode;
+      event?: EventRecord | null;
+      status?: EventStatus | null;
+    };
+  }>(
+    `query PublicEventLookup($slug: String!) {
+      publicEventLookup(slug: $slug) {
+        code
+        status
+        event {
+          ${PUBLIC_EVENT_FIELDS}
+        }
       }
     }`,
-    { id }
+    { slug }
   );
 
-  if (!data.getPublicEvent) {
+  const lookup = data.publicEventLookup;
+
+  return {
+    code: lookup.code,
+    status: lookup.status ?? null,
+    event: lookup.event
+      ? normalizeEventRecord({
+          ...lookup.event,
+          attendeeCount: lookup.event.attendeeCount ?? 0
+        })
+      : null
+  };
+}
+
+export async function fetchPublicEvent(slug: string): Promise<EventRecord | null> {
+  const lookup = await lookupPublicEvent(slug);
+  if (lookup.code !== "OK" || !lookup.event) {
     return null;
   }
-
-  return normalizeEventRecord({
-    ...data.getPublicEvent,
-    attendeeCount: data.getPublicEvent.attendeeCount ?? 0
-  });
+  return lookup.event;
 }
 
 export function normalizeEventStatus(value: string): EventStatus {
@@ -48,6 +84,7 @@ export function normalizeEventStatus(value: string): EventStatus {
 export function normalizeEventRecord(event: EventRecord): EventRecord {
   return {
     ...event,
+    slug: event.slug || slugifyEventName(event.name) || event.id,
     status: normalizeEventStatus(String(event.status))
   };
 }

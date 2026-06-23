@@ -5,6 +5,7 @@ import { Check, Copy, Link2, Mail, MessageCircle, Share2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { getPublicEventPath } from "@/lib/event-slug";
 import type { EventRecord } from "@/lib/types";
 import { pushToast } from "@/store/toast.store";
 
@@ -12,13 +13,6 @@ interface ShareEventMenuProps {
   event: EventRecord;
   size?: "default" | "lg";
   className?: string;
-}
-
-function buildShareUrl(event: EventRecord): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  return window.location.href;
 }
 
 function openShareWindow(url: string): void {
@@ -32,8 +26,17 @@ export function ShareEventMenu({
 }: ShareEventMenuProps): React.JSX.Element {
   const [copied, setCopied] = useState(false);
 
+  function shareUrl(): string {
+    const path = getPublicEventPath(event);
+    if (typeof window !== "undefined") {
+      return `${window.location.origin}${path}`;
+    }
+    const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://events.orbitalops.net";
+    return `${base}${path}`;
+  }
+
   async function handleCopyLink(): Promise<void> {
-    const url = buildShareUrl(event);
+    const url = shareUrl();
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -45,7 +48,7 @@ export function ShareEventMenu({
   }
 
   async function handleNativeShare(): Promise<void> {
-    const url = buildShareUrl(event);
+    const url = shareUrl();
     if (!navigator.share) {
       await handleCopyLink();
       return;
@@ -66,18 +69,18 @@ export function ShareEventMenu({
   }
 
   function shareToLinkedIn(): void {
-    const url = encodeURIComponent(buildShareUrl(event));
+    const url = encodeURIComponent(shareUrl());
     openShareWindow(`https://www.linkedin.com/sharing/share-offsite/?url=${url}`);
   }
 
   function shareToWhatsApp(): void {
-    const url = buildShareUrl(event);
+    const url = shareUrl();
     const text = encodeURIComponent(`Join us for ${event.name}: ${url}`);
     openShareWindow(`https://wa.me/?text=${text}`);
   }
 
   function shareByEmail(): void {
-    const url = buildShareUrl(event);
+    const url = shareUrl();
     const subject = encodeURIComponent(event.name);
     const body = encodeURIComponent(
       `I thought you might be interested in this event:\n\n${event.name}\n${url}`
@@ -119,11 +122,7 @@ export function ShareEventMenu({
               void handleCopyLink();
             }}
           >
-            {copied ? (
-              <Check className="h-4 w-4 text-teal" />
-            ) : (
-              <Copy className="h-4 w-4 text-muted" />
-            )}
+            {copied ? <Check className="h-4 w-4 text-teal" /> : <Copy className="h-4 w-4 text-muted" />}
             {copied ? "Copied!" : "Copy link"}
           </DropdownMenu.Item>
 

@@ -1,13 +1,45 @@
-export type UserRole = "admin" | "user";
+export type UserRole = "admin" | "organizer" | "attendee" | "user";
 
-export type EventStatus = "draft" | "published" | "live" | "completed";
+export type ActiveUserRole = "admin" | "organizer" | "attendee";
 
-export const EVENT_STATUSES: EventStatus[] = ["draft", "published", "live", "completed"];
+export type EventStatus =
+  | "pending_approval"
+  | "draft"
+  | "published"
+  | "live"
+  | "completed";
+
+export const EVENT_STATUSES: EventStatus[] = [
+  "pending_approval",
+  "draft",
+  "published",
+  "live",
+  "completed"
+];
 
 export interface SessionUser {
   id: string;
   email: string;
   role: UserRole;
+}
+
+export function normalizeUserRole(role: UserRole): ActiveUserRole {
+  if (role === "user") {
+    return "organizer";
+  }
+  return role;
+}
+
+export function isAdminRole(role: UserRole): boolean {
+  return normalizeUserRole(role) === "admin";
+}
+
+export function isOrganizerRole(role: UserRole): boolean {
+  return normalizeUserRole(role) === "organizer";
+}
+
+export function isAttendeeRole(role: UserRole): boolean {
+  return normalizeUserRole(role) === "attendee";
 }
 
 export interface AttendeeRecord {
@@ -21,11 +53,13 @@ export interface AttendeeRecord {
 
 export interface EventRecord {
   id: string;
+  slug: string;
   name: string;
   date: string;
   speakerName: string;
   speakerDesignation: string;
   speakerPhotoUrl?: string | null;
+  organizerId?: string | null;
   status: EventStatus;
   attendeeCount: number;
   attendees?: AttendeeRecord[];

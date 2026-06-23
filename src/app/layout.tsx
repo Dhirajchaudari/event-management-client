@@ -18,7 +18,11 @@ const syne = Syne({
 
 export const metadata: Metadata = {
   title: "Onference Event Studio",
-  description: "Curate conference events, speakers, and timelines."
+  description: "Curate conference events, speakers, and timelines.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/apple-icon.svg", type: "image/svg+xml" }]
+  }
 };
 
 export default function RootLayout({

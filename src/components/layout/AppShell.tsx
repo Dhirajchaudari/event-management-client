@@ -2,7 +2,7 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { LogOut, Sparkles, UserRound } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { gqlRequest } from "@/lib/graphql";
 import { getInitials } from "@/lib/format";
+import { normalizeUserRole } from "@/lib/types";
 import { useAuthStore } from "@/store/auth.store";
 import { pushToast } from "@/store/toast.store";
 import { PageLoader } from "@/components/layout/PageLoader";
@@ -25,18 +26,30 @@ interface AppShellProps {
 
 export function AppShell({ title, subtitle, actions, children }: AppShellProps): React.JSX.Element {
   const router = useRouter();
+  const pathname = usePathname();
   const hydrated = useAuthStore((state) => state.hydrated);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const email = useAuthStore((state) => state.email);
   const role = useAuthStore((state) => state.role);
   const resetAuth = useAuthStore((state) => state.resetAuth);
+  const activeRole = normalizeUserRole(role);
 
   useEffect(() => {
     if (!hydrated) return;
     if (!isAuthenticated) {
       router.replace("/login");
+      return;
     }
-  }, [hydrated, isAuthenticated, router]);
+
+    if (activeRole === "attendee" && pathname.startsWith("/events")) {
+      router.replace("/my-events");
+      return;
+    }
+
+    if (activeRole !== "attendee" && pathname.startsWith("/my-events")) {
+      router.replace("/events");
+    }
+  }, [hydrated, isAuthenticated, router, activeRole, pathname]);
 
   async function handleLogout(): Promise<void> {
     try {
@@ -82,8 +95,8 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps):
               >
                 <div className="px-3 py-2">
                   <p className="text-sm font-medium text-foreground">{email}</p>
-                  <Badge variant={role === "admin" ? "admin" : "muted"} className="mt-2">
-                    {role}
+                  <Badge variant={activeRole === "admin" ? "admin" : "muted"} className="mt-2">
+                    {activeRole}
                   </Badge>
                 </div>
                 <Separator className="my-1" />

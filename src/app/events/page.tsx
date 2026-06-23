@@ -10,6 +10,7 @@ import { EventBentoGrid } from "@/components/events/EventBentoGrid";
 import { EventsOverview } from "@/components/events/EventsOverview";
 import { getBentoGridClass } from "@/lib/event-bento";
 import { FilteredEmptyState } from "@/components/events/FilteredEmptyState";
+import { PendingApprovalsPanel } from "@/components/events/PendingApprovalsPanel";
 import { UpdateStatusDialog } from "@/components/events/UpdateStatusDialog";
 import { ViewAttendeesDialog } from "@/components/events/ViewAttendeesDialog";
 import { AppShell } from "@/components/layout/AppShell";
@@ -42,8 +43,10 @@ import {
   type EventFormValues,
   type EventRecord,
   type EventStatus,
-  type AttendeeRecord
+  type AttendeeRecord,
+  isAdminRole,
 } from "@/lib/types";
+import { useAuthStore } from "@/store/auth.store";
 import { useEventsStore } from "@/store/events.store";
 import { pushToast } from "@/store/toast.store";
 
@@ -71,11 +74,13 @@ const ATTENDEE_FIELDS = `
 
 const EVENT_FIELDS = `
   id
+  slug
   name
   date
   speakerName
   speakerDesignation
   speakerPhotoUrl
+  organizerId
   status
   attendeeCount
   attendees {
@@ -122,6 +127,8 @@ export default function EventsPage(): React.JSX.Element {
 }
 
 function EventsPageContent(): React.JSX.Element {
+  const role = useAuthStore((state) => state.role);
+  const isAdmin = isAdminRole(role);
   const events = useEventsStore((state) => state.events);
   const loading = useEventsStore((state) => state.loading);
   const setEvents = useEventsStore((state) => state.setEvents);
@@ -155,6 +162,22 @@ function EventsPageContent(): React.JSX.Element {
     () => filterEvents(events, debouncedSearch, statusFilter, dateFilter),
     [events, debouncedSearch, statusFilter, dateFilter]
   );
+
+  const pendingReviewEvents = useMemo(
+    () => events.filter((event) => event.status === "pending_approval"),
+    [events]
+  );
+
+  const displayEvents = useMemo(() => {
+    if (!isAdmin || pendingReviewEvents.length === 0) {
+      return filteredEvents;
+    }
+
+    const pendingIds = new Set(pendingReviewEvents.map((event) => event.id));
+    const pendingInView = filteredEvents.filter((event) => pendingIds.has(event.id));
+    const rest = filteredEvents.filter((event) => !pendingIds.has(event.id));
+    return [...pendingInView, ...rest];
+  }, [filteredEvents, isAdmin, pendingReviewEvents]);
 
   const fetchEvents = useCallback(async (): Promise<void> => {
     const data = await gqlRequest<{ events: EventRecord[] }>(
@@ -400,7 +423,7 @@ function EventsPageContent(): React.JSX.Element {
             { id: createdId, input: contentInput }
           );
         }
-        pushToast("Event created", "success");
+        pushToast(isAdmin ? "Event created" : "Event submitted for admin approval", "success");
       } else if (existingEventId) {
         await gqlRequest(
           `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
@@ -495,10 +518,74 @@ function EventsPageContent(): React.JSX.Element {
     [updateEvent]
   );
 
+  async function handleApproveEvent(event: EventRecord): Promise<void> {
+    setSaving(true);
+    try {
+      const data = await gqlRequest<{ approveEvent: EventRecord }>(
+        `mutation ApproveEvent($eventId: ID!) {
+          approveEvent(eventId: $eventId) { ${EVENT_FIELDS} }
+        }`,
+        { eventId: event.id }
+      );
+      updateEvent(data.approveEvent.id, normalizeEventRecord(data.approveEvent));
+      pushToast(
+        event.status === "draft" ? "Event published" : "Event approved and published",
+        "success"
+      );
+    } catch (error) {
+      if (error instanceof UnauthorizedError) return;
+      pushToast(error instanceof Error ? error.message : "Failed to approve event", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSubmitForApproval(event: EventRecord): Promise<void> {
+    setSaving(true);
+    try {
+      const data = await gqlRequest<{ submitEventForApproval: EventRecord }>(
+        `mutation SubmitEventForApproval($eventId: ID!) {
+          submitEventForApproval(eventId: $eventId) { ${EVENT_FIELDS} }
+        }`,
+        { eventId: event.id }
+      );
+      updateEvent(data.submitEventForApproval.id, normalizeEventRecord(data.submitEventForApproval));
+      pushToast("Event submitted for admin approval", "success");
+    } catch (error) {
+      if (error instanceof UnauthorizedError) return;
+      pushToast(error instanceof Error ? error.message : "Failed to submit event", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRejectEvent(event: EventRecord): Promise<void> {
+    setSaving(true);
+    try {
+      const data = await gqlRequest<{ rejectEvent: EventRecord }>(
+        `mutation RejectEvent($eventId: ID!) {
+          rejectEvent(eventId: $eventId) { ${EVENT_FIELDS} }
+        }`,
+        { eventId: event.id }
+      );
+      updateEvent(data.rejectEvent.id, normalizeEventRecord(data.rejectEvent));
+      pushToast("Event returned to organizer as draft", "info");
+    } catch (error) {
+      if (error instanceof UnauthorizedError) return;
+      pushToast(error instanceof Error ? error.message : "Failed to reject event", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <AppShell
-      title="Event lineup"
-      subtitle="Curate sessions, speakers, and dates in a timeline built for conference teams."
+      title={isAdmin ? "Event lineup" : "My submitted events"}
+      subtitle={
+        isAdmin
+          ? "Review organizer submissions, approve events, and manage the full conference catalog."
+          : "Create events and track admin approval before they go live on the public site."
+      }
       actions={
         <div className="flex gap-2">
           <Button
@@ -532,6 +619,15 @@ function EventsPageContent(): React.JSX.Element {
         <div className="space-y-5">
           <EventsOverview events={events} />
 
+          {isAdmin ? (
+            <PendingApprovalsPanel
+              events={pendingReviewEvents}
+              loading={saving}
+              onApprove={(event) => void handleApproveEvent(event)}
+              onReject={(event) => void handleRejectEvent(event)}
+            />
+          ) : null}
+
           <EventFiltersBar
             search={searchInput}
             status={statusFilter}
@@ -547,12 +643,17 @@ function EventsPageContent(): React.JSX.Element {
             <FilteredEmptyState onClearFilters={clearFilters} />
           ) : (
             <EventBentoGrid
-              events={filteredEvents}
+              events={displayEvents}
+              isAdmin={isAdmin}
               onEdit={openEditDialog}
               onDelete={setDeleteTarget}
               onExportPdf={(item) => void handleExportPdf(item)}
               onUpdateStatus={setStatusTarget}
               onViewAttendees={setAttendeesTarget}
+              onSubmitForApproval={(item) => void handleSubmitForApproval(item)}
+              onApprove={isAdmin ? (item) => void handleApproveEvent(item) : undefined}
+              onReject={isAdmin ? (item) => void handleRejectEvent(item) : undefined}
+              reviewLoading={saving}
             />
           )}
         </div>
@@ -591,6 +692,7 @@ function EventsPageContent(): React.JSX.Element {
       <UpdateStatusDialog
         event={statusTarget}
         loading={saving}
+        isAdmin={isAdmin}
         onClose={() => setStatusTarget(null)}
         onSave={handleStatusSave}
       />

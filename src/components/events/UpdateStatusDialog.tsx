@@ -12,15 +12,17 @@ import {
 } from "@/components/ui/dialog";
 import {
   getEventStatusLabel,
+  getLifecycleStatuses,
   isStatusOptionDisabled,
   isStatusTransitionAllowed
 } from "@/lib/event-status";
-import { EVENT_STATUSES, type EventRecord, type EventStatus } from "@/lib/types";
+import { type EventRecord, type EventStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface UpdateStatusDialogProps {
   event: EventRecord | null;
   loading?: boolean;
+  isAdmin?: boolean;
   onClose: () => void;
   onSave: (status: EventStatus) => Promise<void>;
 }
@@ -28,6 +30,7 @@ interface UpdateStatusDialogProps {
 export function UpdateStatusDialog({
   event,
   loading = false,
+  isAdmin = false,
   onClose,
   onSave
 }: UpdateStatusDialogProps): React.JSX.Element {
@@ -48,15 +51,24 @@ export function UpdateStatusDialog({
         <DialogHeader>
           <DialogTitle>Update status</DialogTitle>
           <DialogDescription>
-            {event ? `Advance the lifecycle for "${event.name}".` : ""}
+            {event
+              ? isAdmin
+                ? `Advance the lifecycle for "${event.name}".`
+                : `Only admins can publish events. "${event.name}" must be approved first.`
+              : ""}
           </DialogDescription>
         </DialogHeader>
 
+        {!isAdmin ? (
+          <p className="text-sm text-muted">
+            Your submission is reviewed by an admin before it appears on the public site.
+          </p>
+        ) : (
         <fieldset className="space-y-3">
           <legend className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
             Status
           </legend>
-          {EVENT_STATUSES.map((option) => {
+          {getLifecycleStatuses().map((option) => {
             const disabled = event ? isStatusOptionDisabled(event.status, option) : true;
             const inputId = `status-${option}`;
 
@@ -89,14 +101,17 @@ export function UpdateStatusDialog({
             );
           })}
         </fieldset>
+        )}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="secondary" onClick={onClose} disabled={loading}>
-            Cancel
+            {isAdmin ? "Cancel" : "Close"}
           </Button>
+          {isAdmin ? (
           <Button disabled={loading || !canConfirm} onClick={() => void onSave(status)}>
             {loading ? "Saving..." : "Confirm status"}
           </Button>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
