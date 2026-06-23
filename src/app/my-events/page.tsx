@@ -64,7 +64,7 @@ export default function MyEventsPage(): React.JSX.Element {
       title="My events"
       subtitle="Track the sessions you have registered for and open their public pages anytime."
     >
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
+      <div id="insights" className="mb-8 grid gap-4 sm:grid-cols-3">
         <div className="rounded-[1.5rem] border border-border/70 bg-surface/70 p-5">
           <p className="text-xs uppercase tracking-[0.14em] text-muted">Registered</p>
           <p className="font-display mt-2 text-3xl font-semibold text-foreground">{events.length}</p>

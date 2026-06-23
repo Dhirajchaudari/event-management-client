@@ -1,15 +1,13 @@
 "use client";
 
-import { ArrowLeft, KeyRound, LogIn, UserPlus } from "lucide-react";
+import { KeyRound, LogIn, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { LoginFormPanel } from "@/components/auth/LoginFormPanel";
 import { LoginHero } from "@/components/auth/LoginHero";
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { PageLoader } from "@/components/layout/PageLoader";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   getDashboardPathForRole,
   getPortalLabel,
@@ -19,11 +17,8 @@ import {
 } from "@/lib/auth-routing";
 import { gqlRequest, UnauthorizedError } from "@/lib/graphql";
 import type { SessionUser } from "@/lib/types";
-import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 import { pushToast } from "@/store/toast.store";
-
-const PORTALS: LoginPortal[] = ["organizer", "attendee", "admin"];
 
 type AuthMode = "login" | "register" | "reset-password";
 
@@ -72,6 +67,91 @@ const MODE_META: Record<
   }
 };
 
+function LoginAside({
+  portal,
+  setPortal,
+  mode,
+  switchMode,
+  portalCopy,
+  modeMeta,
+  ModeIcon,
+  email,
+  setEmail,
+  password,
+  setPassword,
+  currentPassword,
+  setCurrentPassword,
+  newPassword,
+  setNewPassword,
+  confirmPassword,
+  setConfirmPassword,
+  loading,
+  onLogin,
+  onRegister,
+  onResetPassword,
+  idPrefix = ""
+}: {
+  portal: LoginPortal;
+  setPortal: (portal: LoginPortal) => void;
+  mode: AuthMode;
+  switchMode: (mode: AuthMode) => void;
+  portalCopy: (typeof PORTAL_COPY)[LoginPortal];
+  modeMeta: (typeof MODE_META)[AuthMode];
+  ModeIcon: (typeof MODE_META)[AuthMode]["icon"];
+  email: string;
+  setEmail: (value: string) => void;
+  password: string;
+  setPassword: (value: string) => void;
+  currentPassword: string;
+  setCurrentPassword: (value: string) => void;
+  newPassword: string;
+  setNewPassword: (value: string) => void;
+  confirmPassword: string;
+  setConfirmPassword: (value: string) => void;
+  loading: boolean;
+  onLogin: (event: React.FormEvent<HTMLFormElement>) => void;
+  onRegister: (event: React.FormEvent<HTMLFormElement>) => void;
+  onResetPassword: (event: React.FormEvent<HTMLFormElement>) => void;
+  idPrefix?: string;
+}): React.JSX.Element {
+  return (
+    <div className="mx-auto w-full max-w-md">
+      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-teal/25 bg-teal/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-teal">
+        Secure access
+      </div>
+
+      <LoginFormPanel
+        portal={portal}
+        setPortal={setPortal}
+        mode={mode}
+        switchMode={switchMode}
+        portalCopy={portalCopy}
+        modeMeta={modeMeta}
+        ModeIcon={ModeIcon}
+        email={email}
+        setEmail={setEmail}
+        password={password}
+        setPassword={setPassword}
+        currentPassword={currentPassword}
+        setCurrentPassword={setCurrentPassword}
+        newPassword={newPassword}
+        setNewPassword={setNewPassword}
+        confirmPassword={confirmPassword}
+        setConfirmPassword={setConfirmPassword}
+        loading={loading}
+        onLogin={onLogin}
+        onRegister={onRegister}
+        onResetPassword={onResetPassword}
+        idPrefix={idPrefix}
+      />
+
+      <p className="mt-5 text-center text-xs leading-relaxed text-muted/90">
+        By continuing, you agree to use this workspace for event management and registration only.
+      </p>
+    </div>
+  );
+}
+
 export default function LoginPage(): React.JSX.Element {
   const router = useRouter();
   const hydrated = useAuthStore((state) => state.hydrated);
@@ -89,6 +169,27 @@ export default function LoginPage(): React.JSX.Element {
   const portalCopy = PORTAL_COPY[portal];
   const modeMeta = MODE_META[mode];
   const ModeIcon = modeMeta.icon;
+
+  const formProps = {
+    portal,
+    setPortal,
+    mode,
+    switchMode,
+    portalCopy,
+    modeMeta,
+    ModeIcon,
+    email,
+    setEmail,
+    password,
+    setPassword,
+    currentPassword,
+    setCurrentPassword,
+    newPassword,
+    setNewPassword,
+    confirmPassword,
+    setConfirmPassword,
+    loading
+  };
 
   useEffect(() => {
     if (hydrated && isAuthenticated) {
@@ -210,231 +311,45 @@ export default function LoginPage(): React.JSX.Element {
       <div className="grid min-h-screen lg:grid-cols-2">
         <LoginHero />
 
-        <section className="relative flex min-h-screen flex-col">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.08),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(232,165,75,0.08),transparent_30%)]" />
-          <div className="noise-overlay pointer-events-none absolute inset-0 opacity-[0.12]" />
+        <section className="relative hidden min-h-screen overflow-hidden lg:flex lg:items-center lg:justify-center">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.1),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(232,165,75,0.1),transparent_34%),linear-gradient(165deg,#0b0b12_0%,#11111b_48%,#0d0d14_100%)]" />
+          <div className="noise-overlay pointer-events-none absolute inset-0 opacity-[0.22]" />
+          <div className="absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-border/80 to-transparent" />
 
-          <div className="relative flex flex-1 flex-col px-6 py-8 sm:px-10 lg:px-12 xl:px-16">
-            <div className="mb-8 lg:hidden">
+          <div className="relative flex w-full items-center justify-center px-10 py-16 xl:px-14">
+            <LoginAside
+              {...formProps}
+              onLogin={(event) => void handleLogin(event)}
+              onRegister={(event) => void handleRegister(event)}
+              onResetPassword={(event) => void handleResetPassword(event)}
+            />
+          </div>
+
+          <p className="absolute bottom-10 left-1/2 w-full max-w-md -translate-x-1/2 px-6 text-center text-xs uppercase tracking-[0.24em] text-muted/80 xl:bottom-14">
+            Secure sign-in · Onference Event Studio
+          </p>
+        </section>
+
+        <section className="relative flex min-h-screen flex-col lg:hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.1),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(232,165,75,0.1),transparent_34%),linear-gradient(165deg,#0b0b12_0%,#11111b_48%,#0d0d14_100%)]" />
+          <div className="noise-overlay pointer-events-none absolute inset-0 opacity-[0.22]" />
+
+          <div className="relative flex min-h-screen flex-col items-center justify-center p-6 sm:p-10">
+            <div className="absolute left-6 top-8 sm:left-10 sm:top-10">
               <BrandLogo />
             </div>
-
-            <div className="flex flex-1 items-center justify-center py-6">
-              <div className="w-full max-w-lg">
-                <div className="rounded-[2rem] border border-border/70 bg-surface/75 p-7 shadow-[0_28px_80px_-36px_rgba(0,0,0,0.75)] backdrop-blur-xl sm:p-8">
-                  {mode === "reset-password" ? (
-                    <button
-                      type="button"
-                      onClick={() => switchMode("login")}
-                      className="mb-5 inline-flex items-center gap-2 text-sm text-muted transition hover:text-foreground"
-                    >
-                      <ArrowLeft className="h-4 w-4" />
-                      Back to sign in
-                    </button>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-1.5 rounded-2xl border border-border/70 bg-background/50 p-1.5">
-                      {PORTALS.map((item) => (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => {
-                            setPortal(item);
-                            switchMode("login");
-                          }}
-                          className={cn(
-                            "rounded-xl px-2 py-2.5 text-xs font-medium transition sm:text-sm",
-                            portal === item
-                              ? "bg-accent text-accent-foreground shadow-sm"
-                              : "text-muted hover:bg-background/80 hover:text-foreground"
-                          )}
-                        >
-                          {getPortalLabel(item)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-6 flex items-start gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10">
-                      <ModeIcon className="h-5 w-5 text-accent" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent">
-                        {modeMeta.eyebrow}
-                      </p>
-                      <h2 className="font-display mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-                        {mode === "login" ? portalCopy.title : modeMeta.title}
-                      </h2>
-                      <p className="mt-2 text-sm leading-relaxed text-muted">
-                        {mode === "login" ? portalCopy.subtitle : modeMeta.subtitle}
-                      </p>
-                    </div>
-                  </div>
-
-                  {mode !== "reset-password" && portalCopy.showRegister ? (
-                    <div className="mt-6 flex rounded-xl border border-border/70 bg-background/40 p-1">
-                      <button
-                        type="button"
-                        className={cn(
-                          "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition",
-                          mode === "login"
-                            ? "bg-surface text-foreground shadow-sm"
-                            : "text-muted hover:text-foreground"
-                        )}
-                        onClick={() => switchMode("login")}
-                      >
-                        Sign in
-                      </button>
-                      <button
-                        type="button"
-                        className={cn(
-                          "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition",
-                          mode === "register"
-                            ? "bg-surface text-foreground shadow-sm"
-                            : "text-muted hover:text-foreground"
-                        )}
-                        onClick={() => switchMode("register")}
-                      >
-                        Create account
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {mode === "login" ? (
-                    <form className="mt-7 space-y-5" onSubmit={(event) => void handleLogin(event)}>
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          autoComplete="email"
-                          value={email}
-                          onChange={(event) => setEmail(event.target.value)}
-                          placeholder={portal === "admin" ? "admin@orbitalops.net" : "you@clinic.org"}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <Label htmlFor="password">Password</Label>
-                          <button
-                            type="button"
-                            onClick={() => switchMode("reset-password")}
-                            className="text-xs font-medium text-accent transition hover:brightness-110"
-                          >
-                            Forgot password?
-                          </button>
-                        </div>
-                        <Input
-                          id="password"
-                          type="password"
-                          autoComplete="current-password"
-                          value={password}
-                          onChange={(event) => setPassword(event.target.value)}
-                          required
-                        />
-                      </div>
-                      <Button type="submit" className="w-full" size="lg" disabled={loading}>
-                        {loading ? "Please wait..." : `Continue as ${getPortalLabel(portal).toLowerCase()}`}
-                      </Button>
-                    </form>
-                  ) : null}
-
-                  {mode === "register" ? (
-                    <form className="mt-7 space-y-5" onSubmit={(event) => void handleRegister(event)}>
-                      <div className="space-y-2">
-                        <Label htmlFor="register-email">Email</Label>
-                        <Input
-                          id="register-email"
-                          type="email"
-                          autoComplete="email"
-                          value={email}
-                          onChange={(event) => setEmail(event.target.value)}
-                          placeholder="you@clinic.org"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="register-password">Password</Label>
-                        <Input
-                          id="register-password"
-                          type="password"
-                          autoComplete="new-password"
-                          value={password}
-                          onChange={(event) => setPassword(event.target.value)}
-                          required
-                        />
-                      </div>
-                      <Button type="submit" className="w-full" size="lg" disabled={loading}>
-                        {loading
-                          ? "Please wait..."
-                          : `Create ${getPortalLabel(portal).toLowerCase()} account`}
-                      </Button>
-                    </form>
-                  ) : null}
-
-                  {mode === "reset-password" ? (
-                    <form
-                      className="mt-7 space-y-5"
-                      onSubmit={(event) => void handleResetPassword(event)}
-                    >
-                      <div className="space-y-2">
-                        <Label htmlFor="reset-email">Email</Label>
-                        <Input
-                          id="reset-email"
-                          type="email"
-                          autoComplete="email"
-                          value={email}
-                          onChange={(event) => setEmail(event.target.value)}
-                          placeholder="you@clinic.org"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="current-password">Current password</Label>
-                        <Input
-                          id="current-password"
-                          type="password"
-                          autoComplete="current-password"
-                          value={currentPassword}
-                          onChange={(event) => setCurrentPassword(event.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="new-password">New password</Label>
-                        <Input
-                          id="new-password"
-                          type="password"
-                          autoComplete="new-password"
-                          value={newPassword}
-                          onChange={(event) => setNewPassword(event.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="confirm-password">Confirm new password</Label>
-                        <Input
-                          id="confirm-password"
-                          type="password"
-                          autoComplete="new-password"
-                          value={confirmPassword}
-                          onChange={(event) => setConfirmPassword(event.target.value)}
-                          required
-                        />
-                      </div>
-                      <Button type="submit" className="w-full" size="lg" disabled={loading}>
-                        {loading ? "Updating..." : "Update password"}
-                      </Button>
-                    </form>
-                  ) : null}
-                </div>
-
-                <p className="mt-6 text-center text-xs text-muted">
-                  By continuing, you agree to use this workspace for event management and registration only.
-                </p>
-              </div>
+            <div className="w-full py-8">
+              <LoginAside
+                {...formProps}
+                idPrefix="mobile-"
+                onLogin={(event) => void handleLogin(event)}
+                onRegister={(event) => void handleRegister(event)}
+                onResetPassword={(event) => void handleResetPassword(event)}
+              />
             </div>
+            <p className="absolute bottom-8 left-1/2 w-full max-w-md -translate-x-1/2 px-6 text-center text-xs uppercase tracking-[0.24em] text-muted/80 sm:bottom-10">
+              Secure sign-in · Onference Event Studio
+            </p>
           </div>
         </section>
       </div>

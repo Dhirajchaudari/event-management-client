@@ -19,7 +19,7 @@ export function EventsOverview({ events }: EventsOverviewProps): React.JSX.Eleme
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <div id="insights" className="grid gap-3 sm:grid-cols-3">
       {stats.map(({ label, value, icon: Icon }) => (
         <div
           key={label}

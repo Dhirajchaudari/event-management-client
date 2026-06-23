@@ -1,16 +1,18 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { LogOut, Sparkles, UserRound } from "lucide-react";
+import { LayoutDashboard, LogOut, UserRound } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
+import { ProfileDialog } from "@/components/auth/ProfileDialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { gqlRequest } from "@/lib/graphql";
 import { getInitials } from "@/lib/format";
+import { getDashboardPathForRole } from "@/lib/auth-routing";
 import { normalizeUserRole } from "@/lib/types";
 import { useAuthStore } from "@/store/auth.store";
 import { pushToast } from "@/store/toast.store";
@@ -33,6 +35,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps):
   const role = useAuthStore((state) => state.role);
   const resetAuth = useAuthStore((state) => state.resetAuth);
   const activeRole = normalizeUserRole(role);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -50,6 +53,27 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps):
       router.replace("/events");
     }
   }, [hydrated, isAuthenticated, router, activeRole, pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.location.hash) return;
+    if (window.location.hash !== "#insights") return;
+
+    const target = document.getElementById("insights");
+    if (!target) return;
+
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [pathname]);
+
+  function openInsights(): void {
+    const dashboardPath = getDashboardPathForRole(role);
+    if (pathname === dashboardPath) {
+      document.getElementById("insights")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    router.push(`${dashboardPath}#insights`);
+  }
 
   async function handleLogout(): Promise<void> {
     try {
@@ -100,12 +124,22 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps):
                   </Badge>
                 </div>
                 <Separator className="my-1" />
-                <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted outline-none hover:bg-background hover:text-foreground">
+                <DropdownMenu.Item
+                  className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted outline-none hover:bg-background hover:text-foreground"
+                  onSelect={() => {
+                    setProfileOpen(true);
+                  }}
+                >
                   <UserRound className="h-4 w-4" />
                   Profile
                 </DropdownMenu.Item>
-                <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted outline-none hover:bg-background hover:text-foreground">
-                  <Sparkles className="h-4 w-4" />
+                <DropdownMenu.Item
+                  className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted outline-none hover:bg-background hover:text-foreground"
+                  onSelect={() => {
+                    openInsights();
+                  }}
+                >
+                  <LayoutDashboard className="h-4 w-4" />
                   Event insights
                 </DropdownMenu.Item>
                 <Separator className="my-1" />
@@ -137,6 +171,13 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps):
         </div>
         {children}
       </main>
+
+      <ProfileDialog
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        email={email}
+        role={activeRole}
+      />
     </div>
   );
 }
