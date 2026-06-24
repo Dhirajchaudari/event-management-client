@@ -38,14 +38,24 @@ npm run dev
 
 Set Cloudinary vars in server `.env` (same account as product-farming). Speaker photos upload to `onference-events/speakers`.
 
-Default admin: `admin@orbitalops.net` / `EventAdmin@123`
+### Demo accounts (production)
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | `admin@orbitalops.net` | `EventAdmin@123` |
+| Organizer | `organizer.demo@orbitalops.net` | `Organizer@123` |
+| Attendee | `attendee.demo@orbitalops.net` | `Attendee@123` |
+
+Use `/login` and pick the matching portal (Organizer, Attendee, or Admin).
 
 ## Routes
 
 | Path | Description |
 |------|-------------|
-| `/login` | Sign in |
-| `/events` | Event lineup dashboard (CRUD) |
+| `/login` | Sign in (Organizer / Attendee / Admin portals) |
+| `/events` | Organizer & admin event dashboard |
+| `/my-events` | Attendee RSVP dashboard |
+| `/events/[slug]` | Public event page + RSVP |
 
 ## Production
 

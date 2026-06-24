@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Outfit, Syne } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 
 import { AuthBootstrap } from "@/components/auth/AuthBootstrap";
 import { Toaster } from "@/components/ui/toaster";
@@ -36,6 +37,7 @@ export default function RootLayout({
         <AuthBootstrap />
         <Toaster />
         {children}
+        <Analytics />
       </body>
     </html>
   );
