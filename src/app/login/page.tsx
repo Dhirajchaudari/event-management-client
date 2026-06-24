@@ -115,7 +115,7 @@ function LoginAside({
   idPrefix?: string;
 }): React.JSX.Element {
   return (
-    <div className="mx-auto w-full max-w-md">
+    <div className="mx-auto w-full max-w-lg">
       <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-teal/25 bg-teal/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-teal">
         Secure access
       </div>
@@ -325,7 +325,7 @@ export default function LoginPage(): React.JSX.Element {
             />
           </div>
 
-          <p className="absolute bottom-10 left-1/2 w-full max-w-md -translate-x-1/2 px-6 text-center text-xs uppercase tracking-[0.24em] text-muted/80 xl:bottom-14">
+          <p className="absolute bottom-10 left-1/2 w-full max-w-lg -translate-x-1/2 px-6 text-center text-xs uppercase tracking-[0.24em] text-muted/80 xl:bottom-14">
             Secure sign-in · Onference Event Studio
           </p>
         </section>
@@ -347,7 +347,7 @@ export default function LoginPage(): React.JSX.Element {
                 onResetPassword={(event) => void handleResetPassword(event)}
               />
             </div>
-            <p className="absolute bottom-8 left-1/2 w-full max-w-md -translate-x-1/2 px-6 text-center text-xs uppercase tracking-[0.24em] text-muted/80 sm:bottom-10">
+            <p className="absolute bottom-8 left-1/2 w-full max-w-lg -translate-x-1/2 px-6 text-center text-xs uppercase tracking-[0.24em] text-muted/80 sm:bottom-10">
               Secure sign-in · Onference Event Studio
             </p>
           </div>

@@ -355,7 +355,11 @@ function EventsPageContent(): React.JSX.Element {
 
     setGenerating(true);
     try {
+      const wasNewDraft = !selectedEvent?.id;
       const eventId = await ensureEventSavedForAi(context);
+      if (wasNewDraft && !isAdmin) {
+        pushToast("Saved as draft while generating content", "info");
+      }
       const data = await gqlRequest<{
         generateEventContent: { eventDescription: string; speakerIntro: string };
       }>(
@@ -423,7 +427,7 @@ function EventsPageContent(): React.JSX.Element {
             { id: createdId, input: contentInput }
           );
         }
-        pushToast(isAdmin ? "Event created" : "Event submitted for admin approval", "success");
+        pushToast(isAdmin ? "Event created" : "Event saved as draft", "success");
       } else if (existingEventId) {
         await gqlRequest(
           `mutation UpdateEvent($id: String!, $input: UpdateEventInput!) {
